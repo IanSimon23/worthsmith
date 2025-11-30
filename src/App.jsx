@@ -44,6 +44,14 @@ export default function WorthsmithApp() {
     alert("Story saved!");
   }
 
+  function loadStory(story) {
+    if (confirm(`Load "${story.title}"? This will replace your current draft.`)) {
+      const { id, title, timestamp, ...storyData } = story;
+      setDraft(storyData);
+      setStep(1);
+    }
+  }
+
   function updateDraft(updates) {
     setDraft(prev => ({ ...prev, ...updates }));
   }
@@ -183,7 +191,7 @@ export default function WorthsmithApp() {
           {/* Sidebar */}
           {step < 6 && showSidebar && (
             <div className="lg:col-span-1 space-y-6">
-              <SavedStoriesList stories={savedStories} />
+              <SavedStoriesList stories={savedStories} onLoad={loadStory} />
               <SummarySidebar draft={draft} currentStep={step} />
               <QuadrantChart impact={draft.impact} effort={draft.effort} />
             </div>
@@ -216,7 +224,7 @@ function getInitialDraft() {
 }
 
 // Components
-function SavedStoriesList({ stories }) {
+function SavedStoriesList({ stories, onLoad }) {
   if (stories.length === 0) return null;
 
   return (
@@ -224,12 +232,16 @@ function SavedStoriesList({ stories }) {
       <h3 className="font-semibold text-slate-800 mb-4">Saved Stories ({stories.length})</h3>
       <div className="space-y-2 max-h-64 overflow-y-auto">
         {stories.map(story => (
-          <div key={story.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <button
+            key={story.id}
+            onClick={() => onLoad(story)}
+            className="w-full p-3 bg-slate-50 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-300 transition-all text-left"
+          >
             <div className="font-medium text-sm text-slate-800">{story.title}</div>
             <div className="text-xs text-slate-500 mt-1">
-              {new Date(story.timestamp).toLocaleDateString()}
+              {new Date(story.timestamp).toLocaleDateString()} • Click to load
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>
