@@ -193,7 +193,15 @@ export default function WorthsmithApp() {
             <div className="lg:col-span-1 space-y-6">
               <SavedStoriesList stories={savedStories} onLoad={loadStory} />
               <SummarySidebar draft={draft} currentStep={step} />
-              <QuadrantChart impact={draft.impact} effort={draft.effort} />
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <QuadrantChart impact={draft.impact} effort={draft.effort} />
+                </div>
+                <div className="col-span-1">
+                  <ConfidenceZone confidence={draft.confidence} />
+                </div>
+              </div>
+              <DecisionMatrix impact={draft.impact} effort={draft.effort} confidence={draft.confidence} />
             </div>
           )}
         </div>
@@ -384,26 +392,191 @@ function QuadrantChart({ impact, effort }) {
           </div>
         </div>
 
-        {/* Axis Labels */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-slate-500 font-medium">
+        {/* Axis Labels - positioned outside the grid */}
+        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-slate-500 font-medium">
           Effort →
         </div>
-        <div className="absolute left-2 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-slate-500 font-medium">
+        <div className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-slate-500 font-medium whitespace-nowrap">
           Impact →
         </div>
 
         {/* Dot */}
         <div
-          className="absolute w-4 h-4 bg-sky-600 rounded-full border-2 border-white shadow-lg transition-all duration-300 -translate-x-1/2 -translate-y-1/2"
+          className="absolute w-4 h-4 bg-sky-600 rounded-full border-2 border-white shadow-lg transition-all duration-300 -translate-x-1/2 -translate-y-1/2 z-10"
           style={{ left: `${dotX}%`, top: `${dotY}%` }}
         >
           <div className="absolute inset-0 bg-sky-600 rounded-full animate-ping opacity-75" />
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-        <div className="text-sm font-semibold text-slate-800">{quadrant}</div>
-        <div className="text-xs text-slate-600 mt-1">{getQuadrantGuidance(impact, effort)}</div>
+function ConfidenceZone({ confidence }) {
+  const getZone = (conf) => {
+    if (conf >= 7) return { label: "High", color: "emerald" };
+    if (conf >= 4) return { label: "Medium", color: "amber" };
+    return { label: "Low", color: "red" };
+  };
+
+  const zone = getZone(confidence);
+  const barHeight = (confidence / 10) * 100;
+
+  return (
+    <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl h-full flex flex-col">
+      <h3 className="font-semibold text-slate-800 mb-4 text-center">Confidence</h3>
+
+      <div className="flex flex-col items-center justify-center flex-1">
+        <div className="relative w-20 h-48 bg-slate-100 rounded-lg overflow-hidden">
+          {/* Zones background (bottom to top) */}
+          <div className="absolute inset-0 flex flex-col-reverse">
+            <div className="h-[30%] bg-red-50 border-t border-slate-300" />
+            <div className="h-[30%] bg-amber-50 border-t border-slate-300" />
+            <div className="h-[40%] bg-emerald-50" />
+          </div>
+
+          {/* Confidence bar (fills from bottom) */}
+          <div
+            className={`absolute bottom-0 left-0 w-full transition-all duration-300 flex items-center justify-center ${
+              zone.color === 'emerald' ? 'bg-emerald-500' :
+              zone.color === 'amber' ? 'bg-amber-500' :
+              'bg-red-500'
+            }`}
+            style={{ height: `${barHeight}%` }}
+          >
+            {/* Score in colored block */}
+            {barHeight > 15 && (
+              <span className="text-xl font-bold text-white">{confidence}</span>
+            )}
+          </div>
+
+          {/* Score above block if too small */}
+          {barHeight <= 15 && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2">
+              <span className="text-xl font-bold text-slate-700">{confidence}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DecisionMatrix({ impact, effort, confidence }) {
+  const getDecision = () => {
+    // High Impact scenarios
+    if (impact >= 7) {
+      if (effort <= 4 && confidence >= 7) {
+        return {
+          icon: "✅",
+          title: "DO NOW",
+          desc: "High impact, low effort, high confidence - perfect candidate for immediate action.",
+          action: "Add to next sprint",
+          color: "emerald"
+        };
+      }
+      if (effort <= 4 && confidence < 7) {
+        return {
+          icon: "🔍",
+          title: "SPIKE FIRST",
+          desc: "High impact and low effort, but confidence is low. Run a quick validation before committing.",
+          action: "Time-box a spike to reduce uncertainty",
+          color: "blue"
+        };
+      }
+      if (effort >= 7 && confidence >= 7) {
+        return {
+          icon: "🚀",
+          title: "STRATEGIC BET",
+          desc: "Major initiative with high confidence. Ensure stakeholder alignment and resource commitment.",
+          action: "Schedule planning session, break into phases",
+          color: "blue"
+        };
+      }
+      if (effort >= 7 && confidence < 7) {
+        return {
+          icon: "📚",
+          title: "RESEARCH NEEDED",
+          desc: "High impact but high effort and low confidence. De-risk before investing significant resources.",
+          action: "Run discovery, user research, or proof-of-concept",
+          color: "amber"
+        };
+      }
+    }
+
+    // Medium Impact scenarios
+    if (impact >= 4 && impact < 7) {
+      if (confidence < 5) {
+        return {
+          icon: "⚠️",
+          title: "VALIDATE ASSUMPTIONS",
+          desc: "Medium impact with low confidence. Clarify the problem before investing effort.",
+          action: "Talk to users, review data, challenge assumptions",
+          color: "amber"
+        };
+      }
+      return {
+        icon: "⚖️",
+        title: "EVALUATE FURTHER",
+        desc: "Medium impact - could be worthwhile but needs clearer definition or better alternatives.",
+        action: "Revisit outcome, explore alternatives, improve confidence",
+        color: "slate"
+      };
+    }
+
+    // Low Impact scenarios
+    if (effort >= 7) {
+      return {
+        icon: "❌",
+        title: "SAY NO",
+        desc: "Low impact, high effort - this is a time sink. Politely decline or defer indefinitely.",
+        action: "Communicate why this isn't worth doing",
+        color: "red"
+      };
+    }
+
+    return {
+      icon: "🅿️",
+      title: "PARK IT",
+      desc: "Low impact overall. Consider batching with similar small items or backlog grooming.",
+      action: "Add to backlog for future consideration",
+      color: "slate"
+    };
+  };
+
+  const decision = getDecision();
+
+  return (
+    <div className={`bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-2 ${
+      decision.color === 'emerald' ? 'border-emerald-200' :
+      decision.color === 'blue' ? 'border-blue-200' :
+      decision.color === 'amber' ? 'border-amber-200' :
+      decision.color === 'red' ? 'border-red-200' :
+      'border-slate-200'
+    }`}>
+      <div className="flex items-start gap-3">
+        <div className="text-3xl">{decision.icon}</div>
+        <div className="flex-1">
+          <h3 className={`font-bold text-lg ${
+            decision.color === 'emerald' ? 'text-emerald-700' :
+            decision.color === 'blue' ? 'text-blue-700' :
+            decision.color === 'amber' ? 'text-amber-700' :
+            decision.color === 'red' ? 'text-red-700' :
+            'text-slate-700'
+          }`}>
+            {decision.title}
+          </h3>
+          <p className="text-sm text-slate-600 mt-2">{decision.desc}</p>
+          <div className={`mt-3 p-3 rounded-lg text-sm ${
+            decision.color === 'emerald' ? 'bg-emerald-50 text-emerald-800' :
+            decision.color === 'blue' ? 'bg-blue-50 text-blue-800' :
+            decision.color === 'amber' ? 'bg-amber-50 text-amber-800' :
+            decision.color === 'red' ? 'bg-red-50 text-red-800' :
+            'bg-slate-50 text-slate-800'
+          }`}>
+            <strong>Next Action:</strong> {decision.action}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -521,6 +694,8 @@ function AlternativesStep({ value, onChange }) {
 }
 
 function ScoringStep({ draft, onChange }) {
+  const decision = getDecisionRecommendation(draft.impact, draft.effort, draft.confidence);
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-start gap-3">
@@ -556,11 +731,14 @@ function ScoringStep({ draft, onChange }) {
       </div>
 
       <div className="bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-slate-200 rounded-xl p-6">
-        <h3 className="font-semibold text-slate-800 mb-3">Classification</h3>
-        <div className="text-lg font-bold text-sky-600">
-          {getQuadrant(draft.impact, draft.effort)}
+        <h3 className="font-semibold text-slate-800 mb-3">Recommendation</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{decision.icon}</span>
+          <div className="text-lg font-bold text-sky-600">
+            {decision.title}
+          </div>
         </div>
-        <p className="text-sm text-slate-600 mt-2">{getQuadrantGuidance(draft.impact, draft.effort)}</p>
+        <p className="text-sm text-slate-600 mt-2">{decision.desc}</p>
       </div>
     </div>
   );
@@ -678,6 +856,39 @@ function calculateCompleteness(draft) {
   return score;
 }
 
+function getDecisionRecommendation(impact, effort, confidence) {
+  // High Impact scenarios
+  if (impact >= 7) {
+    if (effort <= 4 && confidence >= 7) {
+      return { icon: "✅", title: "DO NOW", desc: "High impact, low effort, high confidence - perfect candidate for immediate action." };
+    }
+    if (effort <= 4 && confidence < 7) {
+      return { icon: "🔍", title: "SPIKE FIRST", desc: "High impact and low effort, but confidence is low. Run a quick validation before committing." };
+    }
+    if (effort >= 7 && confidence >= 7) {
+      return { icon: "🚀", title: "STRATEGIC BET", desc: "Major initiative with high confidence. Ensure stakeholder alignment and resource commitment." };
+    }
+    if (effort >= 7 && confidence < 7) {
+      return { icon: "📚", title: "RESEARCH NEEDED", desc: "High impact but high effort and low confidence. De-risk before investing significant resources." };
+    }
+  }
+
+  // Medium Impact scenarios
+  if (impact >= 4 && impact < 7) {
+    if (confidence < 5) {
+      return { icon: "⚠️", title: "VALIDATE ASSUMPTIONS", desc: "Medium impact with low confidence. Clarify the problem before investing effort." };
+    }
+    return { icon: "⚖️", title: "EVALUATE FURTHER", desc: "Medium impact - could be worthwhile but needs clearer definition or better alternatives." };
+  }
+
+  // Low Impact scenarios
+  if (effort >= 7) {
+    return { icon: "❌", title: "SAY NO", desc: "Low impact, high effort - this is a time sink. Politely decline or defer indefinitely." };
+  }
+
+  return { icon: "🅿️", title: "PARK IT", desc: "Low impact overall. Consider batching with similar small items or backlog grooming." };
+}
+
 function generateValueStatement(draft) {
   const { outcome, beneficiary, nonDelivery, alternatives, impact, effort, confidence } = draft;
 
@@ -695,7 +906,7 @@ function generateValueStatement(draft) {
 - Impact: ${impact}/10
 - Effort: ${effort}/10
 - Confidence: ${confidence}/10
-- Classification: ${getQuadrant(impact, effort)}
+- Recommendation: ${getDecisionRecommendation(impact, effort, confidence).title}
 
 ---
 *Generated by Worthsmith • Ready for Jira*`;
