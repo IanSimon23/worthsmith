@@ -52,6 +52,12 @@ export default function WorthsmithApp() {
     }
   }
 
+  function deleteStory(storyId, storyTitle) {
+    if (confirm(`Delete "${storyTitle}"? This cannot be undone.`)) {
+      setSavedStories(prev => prev.filter(s => s.id !== storyId));
+    }
+  }
+
   function updateDraft(updates) {
     setDraft(prev => ({ ...prev, ...updates }));
   }
@@ -191,7 +197,7 @@ export default function WorthsmithApp() {
           {/* Sidebar */}
           {step < 6 && showSidebar && (
             <div className="lg:col-span-1 space-y-6">
-              <SavedStoriesList stories={savedStories} onLoad={loadStory} />
+              <SavedStoriesList stories={savedStories} onLoad={loadStory} onDelete={deleteStory} />
               <SummarySidebar draft={draft} currentStep={step} />
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
@@ -232,7 +238,7 @@ function getInitialDraft() {
 }
 
 // Components
-function SavedStoriesList({ stories, onLoad }) {
+function SavedStoriesList({ stories, onLoad, onDelete }) {
   if (stories.length === 0) return null;
 
   return (
@@ -240,16 +246,32 @@ function SavedStoriesList({ stories, onLoad }) {
       <h3 className="font-semibold text-slate-800 mb-4">Saved Stories ({stories.length})</h3>
       <div className="space-y-2 max-h-64 overflow-y-auto">
         {stories.map(story => (
-          <button
+          <div
             key={story.id}
-            onClick={() => onLoad(story)}
-            className="w-full p-3 bg-slate-50 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-300 transition-all text-left"
+            className="group relative p-3 bg-slate-50 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-300 transition-all"
           >
-            <div className="font-medium text-sm text-slate-800">{story.title}</div>
-            <div className="text-xs text-slate-500 mt-1">
-              {new Date(story.timestamp).toLocaleDateString()} • Click to load
-            </div>
-          </button>
+            <button
+              onClick={() => onLoad(story)}
+              className="w-full text-left"
+            >
+              <div className="font-medium text-sm text-slate-800 pr-8">{story.title}</div>
+              <div className="text-xs text-slate-500 mt-1">
+                {new Date(story.timestamp).toLocaleDateString()} • Click to load
+              </div>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(story.id, story.title);
+              }}
+              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50 rounded p-1"
+              title="Delete story"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
         ))}
       </div>
     </div>
