@@ -4,6 +4,14 @@ import { Lightbulb, Users, AlertTriangle, GitBranch, Target, CheckCircle2, Arrow
 export default function WorthsmithApp() {
   const [step, setStep] = useState(1);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [expressMode, setExpressMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem("worthsmith-express-mode");
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
   const [savedStories, setSavedStories] = useState(() => {
     try {
       const raw = localStorage.getItem("worthsmith-stories");
@@ -28,6 +36,10 @@ export default function WorthsmithApp() {
   useEffect(() => {
     localStorage.setItem("worthsmith-stories", JSON.stringify(savedStories));
   }, [savedStories]);
+
+  useEffect(() => {
+    localStorage.setItem("worthsmith-express-mode", JSON.stringify(expressMode));
+  }, [expressMode]);
 
   function saveStory() {
     const title = prompt("Give this story a title:");
@@ -82,11 +94,25 @@ export default function WorthsmithApp() {
   }
 
   function nextStep() {
-    setStep(s => Math.min(6, s + 1));
+    if (expressMode) {
+      // Express mode: 1 -> 4 -> 5 -> 6
+      if (step === 1) setStep(4);
+      else if (step === 4) setStep(5);
+      else setStep(s => Math.min(6, s + 1));
+    } else {
+      setStep(s => Math.min(6, s + 1));
+    }
   }
 
   function prevStep() {
-    setStep(s => Math.max(1, s - 1));
+    if (expressMode) {
+      // Express mode: 6 -> 5 -> 4 -> 1
+      if (step === 4) setStep(1);
+      else if (step === 5) setStep(4);
+      else setStep(s => Math.max(1, s - 1));
+    } else {
+      setStep(s => Math.max(1, s - 1));
+    }
   }
 
   return (
@@ -107,6 +133,17 @@ export default function WorthsmithApp() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setExpressMode(!expressMode)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors ${
+                  expressMode
+                    ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
+                    : 'text-slate-600 border-2 border-slate-200 hover:border-slate-300'
+                }`}
+                title={expressMode ? 'Switch to Full Mode (5 steps)' : 'Switch to Express Mode (3 steps)'}
+              >
+                ⚡ {expressMode ? 'Express' : 'Full'}
+              </button>
               <button
                 onClick={saveStory}
                 className="flex items-center gap-2 px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
@@ -135,24 +172,34 @@ export default function WorthsmithApp() {
         {step < 6 && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6 transition-all hover:shadow-xl">
             <div className="flex items-center justify-between mb-2">
-              {STEPS.map((s, i) => (
-                <React.Fragment key={i}>
-                  <StepIndicator
-                    number={i + 1}
-                    label={s.short}
-                    active={step === i + 1}
-                    completed={step > i + 1}
-                    icon={s.icon}
-                  />
-                  {i < STEPS.length - 1 && (
-                    <div className={`flex-1 h-1 mx-2 rounded transition-all duration-500 ${step > i + 1 ? 'bg-sky-500' : 'bg-slate-200'}`} />
-                  )}
-                </React.Fragment>
-              ))}
+              {(expressMode ? EXPRESS_STEPS : STEPS).map((s, i) => {
+                const stepNum = expressMode ? EXPRESS_STEP_NUMBERS[i] : i + 1;
+                const isActive = step === stepNum;
+                const isCompleted = step > stepNum;
+
+                return (
+                  <React.Fragment key={i}>
+                    <StepIndicator
+                      number={stepNum}
+                      label={s.short}
+                      active={isActive}
+                      completed={isCompleted}
+                      icon={s.icon}
+                    />
+                    {i < (expressMode ? EXPRESS_STEPS : STEPS).length - 1 && (
+                      <div className={`flex-1 h-1 mx-2 rounded transition-all duration-500 ${isCompleted ? 'bg-sky-500' : 'bg-slate-200'}`} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </div>
             <div className="text-center mt-4">
               <div className="text-xs text-slate-500">
-                Step {step} of 5 • {Math.round((step / 5) * 100)}% complete
+                {expressMode ? (
+                  <>Express Mode: Step {step === 1 ? '1' : step === 4 ? '2' : step === 5 ? '3' : step} of 3 • Quick assessment</>
+                ) : (
+                  <>Step {step} of 5 • {Math.round((step / 5) * 100)}% complete</>
+                )}
               </div>
             </div>
           </div>
@@ -163,12 +210,12 @@ export default function WorthsmithApp() {
           <div className={`${step < 6 && showSidebar ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
             <div className="bg-white rounded-2xl shadow-lg p-8 transition-all hover:shadow-xl">
               <div className="transition-opacity duration-300">
-                {step === 1 && <OutcomeStep value={draft.outcome} onChange={v => updateDraft({ outcome: v })} />}
-                {step === 2 && <BeneficiaryStep value={draft.beneficiary} onChange={v => updateDraft({ beneficiary: v })} />}
-                {step === 3 && <ImpactStep value={draft.nonDelivery} onChange={v => updateDraft({ nonDelivery: v })} />}
-                {step === 4 && <AlternativesStep value={draft.alternatives} onChange={v => updateDraft({ alternatives: v })} />}
+                {step === 1 && <OutcomeStep value={draft.outcome} onChange={v => updateDraft({ outcome: v })} expressMode={expressMode} />}
+                {step === 2 && !expressMode && <BeneficiaryStep value={draft.beneficiary} onChange={v => updateDraft({ beneficiary: v })} />}
+                {step === 3 && !expressMode && <ImpactStep value={draft.nonDelivery} onChange={v => updateDraft({ nonDelivery: v })} />}
+                {step === 4 && <AlternativesStep value={draft.alternatives} onChange={v => updateDraft({ alternatives: v })} expressMode={expressMode} />}
                 {step === 5 && <ScoringStep draft={draft} onChange={updateDraft} />}
-                {step === 6 && <OutputStep draft={draft} onReset={resetDraft} />}
+                {step === 6 && <OutputStep draft={draft} onReset={resetDraft} expressMode={expressMode} />}
               </div>
 
               {/* Navigation */}
@@ -224,6 +271,14 @@ const STEPS = [
   { short: "Alternatives", icon: GitBranch },
   { short: "Score", icon: Target }
 ];
+
+const EXPRESS_STEPS = [
+  { short: "Outcome", icon: Lightbulb },
+  { short: "Alternatives", icon: GitBranch },
+  { short: "Score", icon: Target }
+];
+
+const EXPRESS_STEP_NUMBERS = [1, 4, 5]; // Map express steps to actual step numbers
 
 function getInitialDraft() {
   return {
@@ -346,7 +401,7 @@ function SummarySidebar({ draft, currentStep }) {
           />
           <SummaryItem
             label="Scoring"
-            value={`${draft.impact}/${draft.effort}/${draft.confidence}`}
+            value={`I:${draft.impact} E:${draft.effort} C:${draft.confidence}`}
             completed={currentStep > 5}
             active={currentStep === 5}
             isScore
@@ -378,7 +433,7 @@ function SummaryItem({ label, value, completed, active, isScore }) {
       </div>
       {hasContent && (
         <p className="text-xs text-slate-600 line-clamp-2">
-          {isScore ? `Impact: ${value.split('/')[0]} • Effort: ${value.split('/')[1]}` : value}
+          {isScore ? `Impact: ${value.split(' ')[0].split(':')[1]} • Effort: ${value.split(' ')[1].split(':')[1]} • Confidence: ${value.split(' ')[2].split(':')[1]}` : value}
         </p>
       )}
       {!hasContent && !isScore && (
@@ -604,14 +659,19 @@ function DecisionMatrix({ impact, effort, confidence }) {
   );
 }
 
-function OutcomeStep({ value, onChange }) {
+function OutcomeStep({ value, onChange, expressMode }) {
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex items-start gap-3">
         <Lightbulb className="w-6 h-6 text-sky-600 mt-1 flex-shrink-0" />
         <div className="flex-1">
           <h2 className="text-xl font-bold text-slate-800">What outcome are we pursuing?</h2>
-          <p className="text-slate-600 mt-2">Describe the user problem or business need you're trying to address. Focus on the change you want to see, not the solution.</p>
+          <p className="text-slate-600 mt-2">
+            {expressMode
+              ? "Quickly describe the problem or opportunity. What change do you want to see?"
+              : "Describe the user problem or business need you're trying to address. Focus on the change you want to see, not the solution."
+            }
+          </p>
         </div>
       </div>
 
@@ -684,14 +744,19 @@ function ImpactStep({ value, onChange }) {
   );
 }
 
-function AlternativesStep({ value, onChange }) {
+function AlternativesStep({ value, onChange, expressMode }) {
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex items-start gap-3">
         <GitBranch className="w-6 h-6 text-sky-600 mt-1 flex-shrink-0" />
         <div className="flex-1">
           <h2 className="text-xl font-bold text-slate-800">What alternatives could we consider?</h2>
-          <p className="text-slate-600 mt-2">Challenge the default solution. Is there a cheaper, faster, or simpler way? What if we did nothing?</p>
+          <p className="text-slate-600 mt-2">
+            {expressMode
+              ? "Think fast: Is there a cheaper, simpler way? What if we did nothing?"
+              : "Challenge the default solution. Is there a cheaper, faster, or simpler way? What if we did nothing?"
+            }
+          </p>
         </div>
       </div>
 
@@ -809,8 +874,8 @@ function ScoreSlider({ label, value, onChange, color, description }) {
   );
 }
 
-function OutputStep({ draft, onReset }) {
-  const output = generateValueStatement(draft);
+function OutputStep({ draft, onReset, expressMode }) {
+  const output = generateValueStatement(draft, expressMode);
   const [copied, setCopied] = useState(false);
 
   function copyToClipboard() {
@@ -836,7 +901,12 @@ function OutputStep({ draft, onReset }) {
           <CheckCircle2 className="w-8 h-8 text-emerald-600" />
         </div>
         <h2 className="text-2xl font-bold text-slate-800">Value Statement Ready</h2>
-        <p className="text-slate-600 mt-2">Copy this into your Jira story or save for later</p>
+        <p className="text-slate-600 mt-2">
+          {expressMode
+            ? "Quick assessment complete - copy this into your Jira story"
+            : "Copy this into your Jira story or save for later"
+          }
+        </p>
       </div>
 
       <div className="bg-slate-50 border-2 border-slate-200 rounded-xl p-6">
@@ -911,9 +981,28 @@ function getDecisionRecommendation(impact, effort, confidence) {
   return { icon: "🅿️", title: "PARK IT", desc: "Low impact overall. Consider batching with similar small items or backlog grooming." };
 }
 
-function generateValueStatement(draft) {
+function generateValueStatement(draft, expressMode = false) {
   const { outcome, beneficiary, nonDelivery, alternatives, impact, effort, confidence } = draft;
 
+  if (expressMode) {
+    // Shorter format for express mode
+    return `**Value Statement (Express)**
+
+**Outcome:** ${outcome || '_not specified_'}
+
+**Alternatives Considered:** ${alternatives || '_not specified_'}
+
+**Scoring:**
+- Impact: ${impact}/10
+- Effort: ${effort}/10
+- Confidence: ${confidence}/10
+- Recommendation: ${getDecisionRecommendation(impact, effort, confidence).title}
+
+---
+*Generated by Worthsmith Express Mode • Quick Assessment*`;
+  }
+
+  // Full format
   return `**Value Statement**
 
 **Outcome:** ${outcome || '_not specified_'}

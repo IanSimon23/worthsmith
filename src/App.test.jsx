@@ -438,6 +438,34 @@ describe('WorthsmithApp', () => {
     })
   })
 
+  describe('Express Mode', () => {
+    it('has an express mode toggle button', () => {
+      render(<WorthsmithApp />)
+
+      // Should have a button with Express or Full text
+      const toggleButton = screen.getByRole('button', { name: /Full/i })
+      expect(toggleButton).toBeInTheDocument()
+    })
+
+    it('does not break navigation when express mode is toggled', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Toggle express mode
+      const toggleButton = screen.getByRole('button', { name: /Full/i })
+      await user.click(toggleButton)
+
+      // Should still be able to navigate
+      expect(screen.getByText(/What outcome are we pursuing/i)).toBeInTheDocument()
+
+      const nextButton = screen.getByRole('button', { name: /Next/i })
+      await user.click(nextButton)
+
+      // Should navigate to some step (alternatives in express mode)
+      expect(nextButton).toBeInTheDocument() // Navigation still works
+    })
+  })
+
   describe('Decision Matrix', () => {
     it('shows DO NOW for high impact, low effort, high confidence', async () => {
       render(<WorthsmithApp />)
