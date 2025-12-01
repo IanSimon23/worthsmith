@@ -87,6 +87,7 @@ export default function WorthsmithApp() {
       beneficiary: "First-time customers in checkout flow; Customer Service team handling shipping queries; Marketing team measuring conversion rates",
       nonDelivery: "We continue losing approximately 15% of new users at checkout (estimated £45k/month in lost revenue). CS team continues handling 200+ weekly tickets about unexpected shipping costs. Brand perception suffers due to 'hidden fees' complaints on review sites.",
       alternatives: "Quick copy change to existing checkout page; Add expandable FAQ section; Run 2-week A/B test with simplified flow; Add shipping calculator widget; Do nothing and measure baseline for one sprint; Partner with shipping provider for flat-rate option",
+      reach: 8,
       impact: 8,
       effort: 3,
       confidence: 7
@@ -248,13 +249,13 @@ export default function WorthsmithApp() {
               <SummarySidebar draft={draft} currentStep={step} />
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
-                  <QuadrantChart impact={draft.impact} effort={draft.effort} />
+                  <ValueMatrix reach={draft.reach} impact={draft.impact} />
                 </div>
                 <div className="col-span-1">
                   <ConfidenceZone confidence={draft.confidence} />
                 </div>
               </div>
-              <DecisionMatrix impact={draft.impact} effort={draft.effort} confidence={draft.confidence} />
+              <DecisionMatrix reach={draft.reach} impact={draft.impact} effort={draft.effort} confidence={draft.confidence} />
             </div>
           )}
         </div>
@@ -286,9 +287,10 @@ function getInitialDraft() {
     beneficiary: "",
     nonDelivery: "",
     alternatives: "",
-    impact: 5,
-    effort: 5,
-    confidence: 5
+    reach: 6,
+    impact: 6,
+    effort: 6,
+    confidence: 6
   };
 }
 
@@ -401,7 +403,7 @@ function SummarySidebar({ draft, currentStep }) {
           />
           <SummaryItem
             label="Scoring"
-            value={`I:${draft.impact} E:${draft.effort} C:${draft.confidence}`}
+            value={`R:${draft.reach} I:${draft.impact} E:${draft.effort} C:${draft.confidence}`}
             completed={currentStep > 5}
             active={currentStep === 5}
             isScore
@@ -433,7 +435,7 @@ function SummaryItem({ label, value, completed, active, isScore }) {
       </div>
       {hasContent && (
         <p className="text-xs text-slate-600 line-clamp-2">
-          {isScore ? `Impact: ${value.split(' ')[0].split(':')[1]} • Effort: ${value.split(' ')[1].split(':')[1]} • Confidence: ${value.split(' ')[2].split(':')[1]}` : value}
+          {isScore ? `Reach: ${value.split(' ')[0].split(':')[1]} • Impact: ${value.split(' ')[1].split(':')[1]} • Effort: ${value.split(' ')[2].split(':')[1]} • Confidence: ${value.split(' ')[3].split(':')[1]}` : value}
         </p>
       )}
       {!hasContent && !isScore && (
@@ -443,35 +445,41 @@ function SummaryItem({ label, value, completed, active, isScore }) {
   );
 }
 
-function QuadrantChart({ impact, effort }) {
-  const quadrant = getQuadrant(impact, effort);
-  const dotX = (effort / 10) * 100;
+function ValueMatrix({ reach, impact }) {
+  // This shows Reach vs Impact to visualize VALUE
+  const dotX = (reach / 10) * 100;
   const dotY = 100 - (impact / 10) * 100;
+  const value = reach * impact;
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl">
-      <h3 className="font-semibold text-slate-800 mb-4">Impact vs Effort</h3>
+      <h3 className="font-semibold text-slate-800 mb-2">Value (Reach × Impact)</h3>
+      <p className="text-xs text-slate-500 mb-4">Value score: {value} {value >= 49 ? '(High)' : value >= 16 ? '(Medium)' : '(Low)'}</p>
 
       <div className="relative aspect-square bg-slate-50 rounded-lg overflow-hidden border-2 border-slate-200">
-        {/* Quadrants */}
+        {/* Quadrants - color coded by value tier */}
         <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-          <div className="bg-emerald-50 border-r border-b border-slate-300 flex items-center justify-center">
-            <span className="text-xs text-emerald-700 font-medium">Quick Win</span>
+          {/* Top-left: Low Reach, High Impact = Medium Value */}
+          <div className="bg-amber-50 border-r border-b border-slate-300 flex items-center justify-center">
+            <span className="text-xs text-amber-700 font-medium">Med Value</span>
           </div>
-          <div className="bg-blue-50 border-b border-slate-300 flex items-center justify-center">
-            <span className="text-xs text-blue-700 font-medium">Strategic</span>
+          {/* Top-right: High Reach, High Impact = High Value */}
+          <div className="bg-emerald-50 border-b border-slate-300 flex items-center justify-center">
+            <span className="text-xs text-emerald-700 font-medium">High Value</span>
           </div>
+          {/* Bottom-left: Low Reach, Low Impact = Low Value */}
           <div className="bg-slate-100 border-r border-slate-300 flex items-center justify-center">
             <span className="text-xs text-slate-500 font-medium">Low Value</span>
           </div>
+          {/* Bottom-right: High Reach, Low Impact = Medium Value */}
           <div className="bg-amber-50 flex items-center justify-center">
-            <span className="text-xs text-amber-700 font-medium">Time Sink</span>
+            <span className="text-xs text-amber-700 font-medium">Med Value</span>
           </div>
         </div>
 
-        {/* Axis Labels - positioned outside the grid */}
+        {/* Axis Labels */}
         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-slate-500 font-medium">
-          Effort →
+          Reach →
         </div>
         <div className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-slate-500 font-medium whitespace-nowrap">
           Impact →
@@ -539,116 +547,49 @@ function ConfidenceZone({ confidence }) {
   );
 }
 
-function DecisionMatrix({ impact, effort, confidence }) {
-  const getDecision = () => {
-    // High Impact scenarios
-    if (impact >= 7) {
-      if (effort <= 4 && confidence >= 7) {
-        return {
-          icon: "✅",
-          title: "DO NOW",
-          desc: "High impact, low effort, high confidence - perfect candidate for immediate action.",
-          action: "Add to next sprint",
-          color: "emerald"
-        };
-      }
-      if (effort <= 4 && confidence < 7) {
-        return {
-          icon: "🔍",
-          title: "SPIKE FIRST",
-          desc: "High impact and low effort, but confidence is low. Run a quick validation before committing.",
-          action: "Time-box a spike to reduce uncertainty",
-          color: "blue"
-        };
-      }
-      if (effort >= 7 && confidence >= 7) {
-        return {
-          icon: "🚀",
-          title: "STRATEGIC BET",
-          desc: "Major initiative with high confidence. Ensure stakeholder alignment and resource commitment.",
-          action: "Schedule planning session, break into phases",
-          color: "blue"
-        };
-      }
-      if (effort >= 7 && confidence < 7) {
-        return {
-          icon: "📚",
-          title: "RESEARCH NEEDED",
-          desc: "High impact but high effort and low confidence. De-risk before investing significant resources.",
-          action: "Run discovery, user research, or proof-of-concept",
-          color: "amber"
-        };
-      }
-    }
+function DecisionMatrix({ reach, impact, effort, confidence }) {
+  const decision = getDecisionRecommendation(reach, impact, effort, confidence);
+  const value = reach * impact;
 
-    // Medium Impact scenarios
-    if (impact >= 4 && impact < 7) {
-      if (confidence < 5) {
-        return {
-          icon: "⚠️",
-          title: "VALIDATE ASSUMPTIONS",
-          desc: "Medium impact with low confidence. Clarify the problem before investing effort.",
-          action: "Talk to users, review data, challenge assumptions",
-          color: "amber"
-        };
-      }
-      return {
-        icon: "⚖️",
-        title: "EVALUATE FURTHER",
-        desc: "Medium impact - could be worthwhile but needs clearer definition or better alternatives.",
-        action: "Revisit outcome, explore alternatives, improve confidence",
-        color: "slate"
-      };
-    }
-
-    // Low Impact scenarios
-    if (effort >= 7) {
-      return {
-        icon: "❌",
-        title: "SAY NO",
-        desc: "Low impact, high effort - this is a time sink. Politely decline or defer indefinitely.",
-        action: "Communicate why this isn't worth doing",
-        color: "red"
-      };
-    }
-
-    return {
-      icon: "🅿️",
-      title: "PARK IT",
-      desc: "Low impact overall. Consider batching with similar small items or backlog grooming.",
-      action: "Add to backlog for future consideration",
-      color: "slate"
-    };
+  const getColorClass = (title) => {
+    if (title === "DO NOW" || title === "QUICK WIN") return "emerald";
+    if (title === "DO NEXT" || title === "STRATEGIC BET" || title === "SPIKE FIRST") return "blue";
+    if (title === "VALIDATE FIRST" || title === "VALIDATE ASSUMPTIONS" || title === "CONSIDER ALTERNATIVES" || title === "EVALUATE FURTHER") return "amber";
+    if (title === "SAY NO") return "red";
+    return "slate";
   };
 
-  const decision = getDecision();
+  const color = getColorClass(decision.title);
 
   return (
     <div className={`bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl border-2 ${
-      decision.color === 'emerald' ? 'border-emerald-200' :
-      decision.color === 'blue' ? 'border-blue-200' :
-      decision.color === 'amber' ? 'border-amber-200' :
-      decision.color === 'red' ? 'border-red-200' :
+      color === 'emerald' ? 'border-emerald-200' :
+      color === 'blue' ? 'border-blue-200' :
+      color === 'amber' ? 'border-amber-200' :
+      color === 'red' ? 'border-red-200' :
       'border-slate-200'
     }`}>
       <div className="flex items-start gap-3">
         <div className="text-3xl">{decision.icon}</div>
         <div className="flex-1">
           <h3 className={`font-bold text-lg ${
-            decision.color === 'emerald' ? 'text-emerald-700' :
-            decision.color === 'blue' ? 'text-blue-700' :
-            decision.color === 'amber' ? 'text-amber-700' :
-            decision.color === 'red' ? 'text-red-700' :
+            color === 'emerald' ? 'text-emerald-700' :
+            color === 'blue' ? 'text-blue-700' :
+            color === 'amber' ? 'text-amber-700' :
+            color === 'red' ? 'text-red-700' :
             'text-slate-700'
           }`}>
             {decision.title}
           </h3>
+          <div className="text-xs text-slate-500 mt-1">
+            Value: {value} (R:{reach} × I:{impact}) • Effort: {effort} • Confidence: {confidence}
+          </div>
           <p className="text-sm text-slate-600 mt-2">{decision.desc}</p>
           <div className={`mt-3 p-3 rounded-lg text-sm ${
-            decision.color === 'emerald' ? 'bg-emerald-50 text-emerald-800' :
-            decision.color === 'blue' ? 'bg-blue-50 text-blue-800' :
-            decision.color === 'amber' ? 'bg-amber-50 text-amber-800' :
-            decision.color === 'red' ? 'bg-red-50 text-red-800' :
+            color === 'emerald' ? 'bg-emerald-50 text-emerald-800' :
+            color === 'blue' ? 'bg-blue-50 text-blue-800' :
+            color === 'amber' ? 'bg-amber-50 text-amber-800' :
+            color === 'red' ? 'bg-red-50 text-red-800' :
             'bg-slate-50 text-slate-800'
           }`}>
             <strong>Next Action:</strong> {decision.action}
@@ -867,7 +808,9 @@ function AlternativesStep({ value, onChange, expressMode, outcome }) {
 }
 
 function ScoringStep({ draft, onChange }) {
-  const decision = getDecisionRecommendation(draft.impact, draft.effort, draft.confidence);
+  const decision = getDecisionRecommendation(draft.reach, draft.impact, draft.effort, draft.confidence);
+  const riceScore = calculateRICE(draft.reach, draft.impact, draft.confidence, draft.effort);
+  const value = draft.reach * draft.impact;
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -875,11 +818,18 @@ function ScoringStep({ draft, onChange }) {
         <Target className="w-6 h-6 text-sky-600 mt-1 flex-shrink-0" />
         <div className="flex-1">
           <h2 className="text-xl font-bold text-slate-800">How would you score this?</h2>
-          <p className="text-slate-600 mt-2">Rate the expected impact, required effort, and your confidence level on a scale of 0-10.</p>
+          <p className="text-slate-600 mt-2">Rate the reach, impact, effort, and confidence on a scale of 1-10.</p>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 gap-6">
+        <ScoreSlider
+          label="Reach"
+          value={draft.reach}
+          onChange={v => onChange({ reach: v })}
+          color="purple"
+          description="How many people affected?"
+        />
         <ScoreSlider
           label="Impact"
           value={draft.impact}
@@ -904,20 +854,56 @@ function ScoringStep({ draft, onChange }) {
       </div>
 
       <div className="bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-slate-200 rounded-xl p-6">
-        <h3 className="font-semibold text-slate-800 mb-3">Recommendation</h3>
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">{decision.icon}</span>
-          <div className="text-lg font-bold text-sky-600">
-            {decision.title}
+        <div className="grid md:grid-cols-2 gap-6 mb-4">
+          <div>
+            <h3 className="font-semibold text-slate-800">Value Score</h3>
+            <p className="text-xs text-slate-500 mt-1">Reach × Impact</p>
+            <div className="text-3xl font-bold text-sky-600 mt-2">
+              {value}
+            </div>
+            <p className="text-sm text-slate-600 mt-1">
+              {value >= 49 ? 'High Value' : value >= 16 ? 'Medium Value' : 'Low Value'}
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800">RICE Score</h3>
+            <p className="text-xs text-slate-500 mt-1">(R × I × C) / E (reference)</p>
+            <div className="text-3xl font-bold text-slate-600 mt-2">
+              {riceScore}
+            </div>
           </div>
         </div>
-        <p className="text-sm text-slate-600 mt-2">{decision.desc}</p>
+
+        <div className="pt-4 border-t border-slate-300">
+          <h4 className="font-semibold text-slate-800 mb-2">Recommendation</h4>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl">{decision.icon}</span>
+            <div className="text-lg font-bold text-sky-600">
+              {decision.title}
+            </div>
+          </div>
+          <p className="text-sm text-slate-600">{decision.desc}</p>
+        </div>
       </div>
     </div>
   );
 }
 
 function ScoreSlider({ label, value, onChange, color, description }) {
+  const colorClasses = {
+    purple: 'text-purple-600',
+    emerald: 'text-emerald-600',
+    orange: 'text-orange-600',
+    blue: 'text-blue-600'
+  };
+
+  const gradientColors = {
+    purple: '#9333ea',
+    emerald: '#10b981',
+    orange: '#f97316',
+    blue: '#3b82f6'
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
@@ -925,31 +911,19 @@ function ScoreSlider({ label, value, onChange, color, description }) {
           <div className="font-semibold text-slate-800">{label}</div>
           <div className="text-xs text-slate-500">{description}</div>
         </div>
-        <div className={`text-2xl font-bold transition-all ${
-          color === 'emerald' ? 'text-emerald-600' :
-          color === 'orange' ? 'text-orange-600' :
-          'text-blue-600'
-        }`}>
+        <div className={`text-2xl font-bold transition-all ${colorClasses[color]}`}>
           {value}
         </div>
       </div>
       <input
         type="range"
-        min={0}
+        min={1}
         max={10}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
         className="w-full h-2 rounded-lg appearance-none cursor-pointer transition-all"
         style={{
-          background: `linear-gradient(to right, ${
-            color === 'emerald' ? '#10b981' :
-            color === 'orange' ? '#f97316' :
-            '#3b82f6'
-          } 0%, ${
-            color === 'emerald' ? '#10b981' :
-            color === 'orange' ? '#f97316' :
-            '#3b82f6'
-          } ${value * 10}%, #e2e8f0 ${value * 10}%, #e2e8f0 100%)`
+          background: `linear-gradient(to right, ${gradientColors[color]} 0%, ${gradientColors[color]} ${((value - 1) / 9) * 100}%, #e2e8f0 ${((value - 1) / 9) * 100}%, #e2e8f0 100%)`
         }}
       />
       <div className="flex justify-between text-xs text-slate-400">
@@ -1030,45 +1004,128 @@ function calculateCompleteness(draft) {
   if (draft.beneficiary?.length > 0) score += 20;
   if (draft.nonDelivery?.length > 0) score += 20;
   if (draft.alternatives?.length > 0) score += 20;
-  if (draft.impact !== 5 || draft.effort !== 5 || draft.confidence !== 5) score += 20;
+  if (draft.reach !== 6 || draft.impact !== 6 || draft.effort !== 6 || draft.confidence !== 6) score += 20;
   return score;
 }
 
-function getDecisionRecommendation(impact, effort, confidence) {
-  // High Impact scenarios
-  if (impact >= 7) {
-    if (effort <= 4 && confidence >= 7) {
-      return { icon: "✅", title: "DO NOW", desc: "High impact, low effort, high confidence - perfect candidate for immediate action." };
+function calculateRICE(reach, impact, confidence, effort) {
+  if (effort === 0 || effort < 1) return 0;
+  return Math.round((reach * impact * confidence) / effort);
+}
+
+function getDecisionRecommendation(reach, impact, effort, confidence) {
+  // Calculate value tier based on Reach × Impact
+  const value = reach * impact;
+
+  // High Value (R×I ≥ 49)
+  if (value >= 49) {
+    if (effort <= 3 && confidence >= 7) {
+      return {
+        icon: "✅",
+        title: "DO NOW",
+        desc: "High value, low effort, high confidence - perfect candidate for immediate action.",
+        action: "Add to next sprint"
+      };
     }
-    if (effort <= 4 && confidence < 7) {
-      return { icon: "🔍", title: "SPIKE FIRST", desc: "High impact and low effort, but confidence is low. Run a quick validation before committing." };
+    if (effort <= 3 && confidence < 7) {
+      return {
+        icon: "🔍",
+        title: "SPIKE FIRST",
+        desc: "High value and low effort, but confidence is low. Run a quick validation before committing.",
+        action: "Time-box a spike to reduce uncertainty"
+      };
     }
     if (effort >= 7 && confidence >= 7) {
-      return { icon: "🚀", title: "STRATEGIC BET", desc: "Major initiative with high confidence. Ensure stakeholder alignment and resource commitment." };
+      return {
+        icon: "🚀",
+        title: "STRATEGIC BET",
+        desc: "Major initiative with high confidence. Ensure stakeholder alignment and resource commitment.",
+        action: "Schedule planning session, break into phases"
+      };
     }
     if (effort >= 7 && confidence < 7) {
-      return { icon: "📚", title: "RESEARCH NEEDED", desc: "High impact but high effort and low confidence. De-risk before investing significant resources." };
+      return {
+        icon: "📚",
+        title: "DE-RISK FIRST",
+        desc: "High value but too much uncertainty for this investment. Run discovery or proof-of-concept first.",
+        action: "Run discovery, user research, or proof-of-concept"
+      };
+    }
+    if (effort >= 4 && effort <= 6 && confidence >= 7) {
+      return {
+        icon: "🎯",
+        title: "DO NEXT",
+        desc: "Solid high-value project. Queue it up after current priorities.",
+        action: "Add to backlog, prioritize after current sprint"
+      };
+    }
+    if (effort >= 4 && effort <= 6 && confidence < 7) {
+      return {
+        icon: "⚠️",
+        title: "VALIDATE FIRST",
+        desc: "Worth doing if we can confirm our assumptions. Reduce uncertainty before committing.",
+        action: "Talk to users, review data, challenge assumptions"
+      };
     }
   }
 
-  // Medium Impact scenarios
-  if (impact >= 4 && impact < 7) {
+  // Medium Value (R×I 16-48)
+  if (value >= 16 && value < 49) {
     if (confidence < 5) {
-      return { icon: "⚠️", title: "VALIDATE ASSUMPTIONS", desc: "Medium impact with low confidence. Clarify the problem before investing effort." };
+      return {
+        icon: "⚠️",
+        title: "VALIDATE ASSUMPTIONS",
+        desc: "Medium value with low confidence. Clarify the problem before investing effort.",
+        action: "Talk to users, review data, challenge assumptions"
+      };
     }
-    return { icon: "⚖️", title: "EVALUATE FURTHER", desc: "Medium impact - could be worthwhile but needs clearer definition or better alternatives." };
+    if (effort >= 7) {
+      return {
+        icon: "🤔",
+        title: "CONSIDER ALTERNATIVES",
+        desc: "ROI is questionable for this effort level. Look for an easier path to similar value.",
+        action: "Revisit outcome, explore alternatives, reduce scope"
+      };
+    }
+    if (effort <= 3) {
+      return {
+        icon: "💨",
+        title: "QUICK WIN",
+        desc: "Easy enough with decent value. Why not do it?",
+        action: "Add to next sprint or batch with similar tasks"
+      };
+    }
+    return {
+      icon: "⚖️",
+      title: "EVALUATE FURTHER",
+      desc: "Could be worthwhile but needs clearer definition or better alternatives.",
+      action: "Revisit outcome, improve confidence, or find alternatives"
+    };
   }
 
-  // Low Impact scenarios
+  // Low Value (R×I < 16)
   if (effort >= 7) {
-    return { icon: "❌", title: "SAY NO", desc: "Low impact, high effort - this is a time sink. Politely decline or defer indefinitely." };
+    return {
+      icon: "❌",
+      title: "SAY NO",
+      desc: "Low value, high effort - this is a time sink. Politely decline or defer indefinitely.",
+      action: "Communicate why this isn't worth doing"
+    };
   }
 
-  return { icon: "🅿️", title: "PARK IT", desc: "Low impact overall. Consider batching with similar small items or backlog grooming." };
+  return {
+    icon: "🅿️",
+    title: "PARK IT",
+    desc: "Low value overall. Consider batching with similar small items or backlog grooming.",
+    action: "Add to backlog for future consideration"
+  };
 }
 
 function generateValueStatement(draft, expressMode = false) {
-  const { outcome, beneficiary, nonDelivery, alternatives, impact, effort, confidence } = draft;
+  const { outcome, beneficiary, nonDelivery, alternatives, reach, impact, effort, confidence } = draft;
+  const riceScore = calculateRICE(reach, impact, confidence, effort);
+  const value = reach * impact;
+  const decision = getDecisionRecommendation(reach, impact, effort, confidence);
 
   if (expressMode) {
     // Shorter format for express mode
@@ -1079,10 +1136,15 @@ function generateValueStatement(draft, expressMode = false) {
 **Alternatives Considered:** ${alternatives || '_not specified_'}
 
 **Scoring:**
-- Impact: ${impact}/10
+- Value Score: ${value} (Reach: ${reach} × Impact: ${impact}) - ${value >= 49 ? 'High Value' : value >= 16 ? 'Medium Value' : 'Low Value'}
 - Effort: ${effort}/10
 - Confidence: ${confidence}/10
-- Recommendation: ${getDecisionRecommendation(impact, effort, confidence).title}
+- RICE Score: ${riceScore} (reference)
+
+**Recommendation: ${decision.title}**
+${decision.desc}
+
+**Next Action:** ${decision.action}
 
 ---
 *Generated by Worthsmith Express Mode • Quick Assessment*`;
@@ -1100,27 +1162,16 @@ function generateValueStatement(draft, expressMode = false) {
 **Alternatives Considered:** ${alternatives || '_not specified_'}
 
 **Scoring:**
-- Impact: ${impact}/10
+- Value Score: ${value} (Reach: ${reach} × Impact: ${impact}) - ${value >= 49 ? 'High Value' : value >= 16 ? 'Medium Value' : 'Low Value'}
 - Effort: ${effort}/10
 - Confidence: ${confidence}/10
-- Recommendation: ${getDecisionRecommendation(impact, effort, confidence).title}
+- RICE Score: ${riceScore} (reference)
+
+**Recommendation: ${decision.title}**
+${decision.desc}
+
+**Next Action:** ${decision.action}
 
 ---
 *Generated by Worthsmith • Ready for Jira*`;
-}
-
-function getQuadrant(impact, effort) {
-  if (impact >= 7 && effort <= 4) return "🎯 Quick Win";
-  if (impact >= 7 && effort >= 7) return "🚀 Strategic Bet";
-  if (impact <= 4 && effort <= 4) return "🤔 Low Value";
-  if (impact <= 4 && effort >= 7) return "❌ Time Sink";
-  return "⚖️ Evaluate Further";
-}
-
-function getQuadrantGuidance(impact, effort) {
-  if (impact >= 7 && effort <= 4) return "High value, low effort. Prioritize this!";
-  if (impact >= 7 && effort >= 7) return "Major initiative. Ensure alignment before committing.";
-  if (impact <= 4 && effort <= 4) return "Small task. Consider batching with similar items.";
-  if (impact <= 4 && effort >= 7) return "High effort for low return. Reconsider or find alternatives.";
-  return "Needs more analysis. Challenge your assumptions.";
 }

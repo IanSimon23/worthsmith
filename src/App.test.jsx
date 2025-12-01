@@ -136,7 +136,7 @@ describe('WorthsmithApp', () => {
   })
 
   describe('Scoring', () => {
-    it('renders all three score sliders', async () => {
+    it('renders all four score sliders', async () => {
       render(<WorthsmithApp />)
       const user = userEvent.setup()
 
@@ -145,13 +145,14 @@ describe('WorthsmithApp', () => {
         await user.click(screen.getByRole('button', { name: /Next/i }))
       }
 
-      // Check for slider labels using getAllByText since they appear in multiple places
+      // Check for slider labels - we now have Reach, Impact, Effort, Confidence
+      expect(screen.getAllByText('Reach')[0]).toBeInTheDocument()
       expect(screen.getAllByText('Impact')[0]).toBeInTheDocument()
       expect(screen.getAllByText('Effort')[0]).toBeInTheDocument()
       expect(screen.getAllByText('Confidence')[0]).toBeInTheDocument()
     })
 
-    it('shows default scores of 5', async () => {
+    it('shows default scores of 6', async () => {
       render(<WorthsmithApp />)
       const user = userEvent.setup()
 
@@ -161,9 +162,10 @@ describe('WorthsmithApp', () => {
       }
 
       const sliders = screen.getAllByRole('slider')
-      expect(sliders[0]).toHaveValue('5') // Impact
-      expect(sliders[1]).toHaveValue('5') // Effort
-      expect(sliders[2]).toHaveValue('5') // Confidence
+      expect(sliders[0]).toHaveValue('6') // Reach
+      expect(sliders[1]).toHaveValue('6') // Impact
+      expect(sliders[2]).toHaveValue('6') // Effort
+      expect(sliders[3]).toHaveValue('6') // Confidence
     })
 
     it('updates score when slider changes', async () => {
@@ -232,60 +234,49 @@ describe('WorthsmithApp', () => {
       render(<WorthsmithApp />)
       const user = userEvent.setup()
 
-      // Fill and save a story
-      const outcomeField = screen.getByPlaceholderText(/Reduce checkout abandonment/i)
-      await user.type(outcomeField, 'Original outcome')
+      // Save a story first
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Original outcome')
+      await user.click(screen.getByRole('button', { name: /Save Story/i }))
 
-      const saveButton = screen.getByRole('button', { name: /Save Story/i })
-      await user.click(saveButton)
+      // Navigate away and change data
+      await user.clear(screen.getByPlaceholderText(/Reduce checkout abandonment/i))
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'New outcome')
 
-      // Clear the form
-      await user.clear(outcomeField)
-      await user.type(outcomeField, 'Different outcome')
+      // Load the saved story
+      await user.click(screen.getByText('My Story'))
 
-      // Load the story
-      await waitFor(() => {
-        expect(screen.getByText('My Story')).toBeInTheDocument()
-      })
+      // Check confirmation was called
+      expect(global.confirm).toHaveBeenCalled()
 
-      const storyButton = screen.getByText('My Story').closest('button')
-      await user.click(storyButton)
-
-      // Check confirmation was shown
-      expect(global.confirm).toHaveBeenCalledWith(
-        expect.stringContaining('Load "My Story"?')
-      )
-
-      // Check data was loaded
+      // Check data was restored
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toHaveValue('Original outcome')
       })
     })
 
-    it('does not load if cancelled', async () => {
+    it('does not load story if cancelled', async () => {
       global.prompt = vi.fn(() => 'My Story')
       global.confirm = vi.fn(() => false)
 
       render(<WorthsmithApp />)
       const user = userEvent.setup()
 
-      // Save a story
-      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Original')
+      // Save a story first
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Original outcome')
       await user.click(screen.getByRole('button', { name: /Save Story/i }))
 
-      // Try to load but cancel
-      await waitFor(() => {
-        expect(screen.getByText('My Story')).toBeInTheDocument()
-      })
-
+      // Navigate away and change data
       await user.clear(screen.getByPlaceholderText(/Reduce checkout abandonment/i))
-      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Different')
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'New outcome')
 
-      const storyButton = screen.getByText('My Story').closest('button')
-      await user.click(storyButton)
+      // Try to load the saved story
+      await user.click(screen.getByText('My Story'))
 
-      // Data should not change
-      expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toHaveValue('Different')
+      // Check confirmation was called
+      expect(global.confirm).toHaveBeenCalled()
+
+      // Check data was NOT restored (stayed with 'New outcome')
+      expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toHaveValue('New outcome')
     })
   })
 
@@ -300,6 +291,7 @@ describe('WorthsmithApp', () => {
       // Save a story
       await user.click(screen.getByRole('button', { name: /Save Story/i }))
 
+      // Wait for story to appear
       await waitFor(() => {
         expect(screen.getByText('Story to Delete')).toBeInTheDocument()
       })
@@ -408,15 +400,16 @@ describe('WorthsmithApp', () => {
     })
 
     it('loads draft from localStorage on mount', () => {
-      // Pre-populate localStorage
+      // Pre-populate localStorage with updated structure (now includes reach, values are 6)
       localStorageMock.setItem('worthsmith-draft', JSON.stringify({
         outcome: 'Loaded outcome',
         beneficiary: '',
         nonDelivery: '',
         alternatives: '',
-        impact: 5,
-        effort: 5,
-        confidence: 5
+        reach: 6,
+        impact: 6,
+        effort: 6,
+        confidence: 6
       }))
 
       render(<WorthsmithApp />)
@@ -467,7 +460,7 @@ describe('WorthsmithApp', () => {
   })
 
   describe('Decision Matrix', () => {
-    it('shows DO NOW for high impact, low effort, high confidence', async () => {
+    it('shows DO NOW for high reach, high impact, low effort, high confidence', async () => {
       render(<WorthsmithApp />)
       const user = userEvent.setup()
 
@@ -476,11 +469,13 @@ describe('WorthsmithApp', () => {
         await user.click(screen.getByRole('button', { name: /Next/i }))
       }
 
-      // Set scores: Impact=8, Effort=2, Confidence=8
+      // Set scores: Reach=8, Impact=8, Effort=2, Confidence=8
+      // Value = 8×8 = 64 (High Value), Effort=2 (Low), Confidence=8 (High) → DO NOW
       const sliders = screen.getAllByRole('slider')
-      fireEvent.change(sliders[0], { target: { value: '8' } })
-      fireEvent.change(sliders[1], { target: { value: '2' } })
-      fireEvent.change(sliders[2], { target: { value: '8' } })
+      fireEvent.change(sliders[0], { target: { value: '8' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '8' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '2' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '8' } }) // Confidence
 
       // Check for DO NOW recommendation - use getAllByText since it appears twice
       await waitFor(() => {
@@ -489,7 +484,7 @@ describe('WorthsmithApp', () => {
       })
     })
 
-    it('shows SPIKE FIRST for high impact, low effort, low confidence', async () => {
+    it('shows SPIKE FIRST for high reach, high impact, low effort, low confidence', async () => {
       render(<WorthsmithApp />)
       const user = userEvent.setup()
 
@@ -498,11 +493,13 @@ describe('WorthsmithApp', () => {
         await user.click(screen.getByRole('button', { name: /Next/i }))
       }
 
-      // Set scores: Impact=8, Effort=2, Confidence=3
+      // Set scores: Reach=8, Impact=8, Effort=2, Confidence=3
+      // Value = 8×8 = 64 (High Value), Effort=2 (Low), Confidence=3 (Low) → SPIKE FIRST
       const sliders = screen.getAllByRole('slider')
-      fireEvent.change(sliders[0], { target: { value: '8' } })
-      fireEvent.change(sliders[1], { target: { value: '2' } })
-      fireEvent.change(sliders[2], { target: { value: '3' } })
+      fireEvent.change(sliders[0], { target: { value: '8' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '8' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '2' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '3' } }) // Confidence
 
       await waitFor(() => {
         const spikeFirstElements = screen.getAllByText('SPIKE FIRST')
@@ -510,7 +507,7 @@ describe('WorthsmithApp', () => {
       })
     })
 
-    it('shows SAY NO for low impact, high effort', async () => {
+    it('shows STRATEGIC BET for high value, high effort, high confidence', async () => {
       render(<WorthsmithApp />)
       const user = userEvent.setup()
 
@@ -519,14 +516,223 @@ describe('WorthsmithApp', () => {
         await user.click(screen.getByRole('button', { name: /Next/i }))
       }
 
-      // Set scores: Impact=2, Effort=9
+      // Set scores: Reach=7, Impact=7, Effort=8, Confidence=8
+      // Value = 7×7 = 49 (High Value), Effort=8 (High), Confidence=8 (High) → STRATEGIC BET
       const sliders = screen.getAllByRole('slider')
-      fireEvent.change(sliders[0], { target: { value: '2' } })
-      fireEvent.change(sliders[1], { target: { value: '9' } })
+      fireEvent.change(sliders[0], { target: { value: '7' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '7' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '8' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '8' } }) // Confidence
+
+      await waitFor(() => {
+        const strategicBetElements = screen.getAllByText('STRATEGIC BET')
+        expect(strategicBetElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows DE-RISK FIRST for high value, high effort, low confidence', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=7, Impact=7, Effort=8, Confidence=4
+      // Value = 7×7 = 49 (High Value), Effort=8 (High), Confidence=4 (Low) → DE-RISK FIRST
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '7' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '7' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '8' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '4' } }) // Confidence
+
+      await waitFor(() => {
+        const deRiskElements = screen.getAllByText('DE-RISK FIRST')
+        expect(deRiskElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows DO NEXT for high value, medium effort, high confidence', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=7, Impact=7, Effort=5, Confidence=8
+      // Value = 7×7 = 49 (High Value), Effort=5 (Medium), Confidence=8 (High) → DO NEXT
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '7' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '7' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '5' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '8' } }) // Confidence
+
+      await waitFor(() => {
+        const doNextElements = screen.getAllByText('DO NEXT')
+        expect(doNextElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows VALIDATE FIRST for high value, medium effort, low confidence', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=7, Impact=7, Effort=5, Confidence=5
+      // Value = 7×7 = 49 (High Value), Effort=5 (Medium), Confidence=5 (Low) → VALIDATE FIRST
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '7' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '7' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '5' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '5' } }) // Confidence
+
+      await waitFor(() => {
+        const validateFirstElements = screen.getAllByText('VALIDATE FIRST')
+        expect(validateFirstElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows QUICK WIN for medium value, low effort', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=5, Impact=5, Effort=2, Confidence=7
+      // Value = 5×5 = 25 (Medium Value), Effort=2 (Low) → QUICK WIN
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '5' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '5' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '2' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '7' } }) // Confidence
+
+      await waitFor(() => {
+        const quickWinElements = screen.getAllByText('QUICK WIN')
+        expect(quickWinElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows VALIDATE ASSUMPTIONS for medium value, low confidence', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=5, Impact=5, Effort=4, Confidence=3
+      // Value = 5×5 = 25 (Medium Value), Confidence=3 (Low) → VALIDATE ASSUMPTIONS
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '5' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '5' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '4' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '3' } }) // Confidence
+
+      await waitFor(() => {
+        const validateAssumptionsElements = screen.getAllByText('VALIDATE ASSUMPTIONS')
+        expect(validateAssumptionsElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows CONSIDER ALTERNATIVES for medium value, high effort', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=5, Impact=5, Effort=8, Confidence=7
+      // Value = 5×5 = 25 (Medium Value), Effort=8 (High) → CONSIDER ALTERNATIVES
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '5' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '5' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '8' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '7' } }) // Confidence
+
+      await waitFor(() => {
+        const considerAlternativesElements = screen.getAllByText('CONSIDER ALTERNATIVES')
+        expect(considerAlternativesElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows EVALUATE FURTHER for medium value, medium effort, medium confidence', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=5, Impact=5, Effort=5, Confidence=6
+      // Value = 5×5 = 25 (Medium Value), Effort=5 (Medium), Confidence=6 (Medium) → EVALUATE FURTHER
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '5' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '5' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '5' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '6' } }) // Confidence
+
+      await waitFor(() => {
+        const evaluateFurtherElements = screen.getAllByText('EVALUATE FURTHER')
+        expect(evaluateFurtherElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows SAY NO for low reach, low impact, high effort', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=2, Impact=2, Effort=9
+      // Value = 2×2 = 4 (Low Value), Effort=9 (High) → SAY NO
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '2' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '2' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '9' } }) // Effort
 
       await waitFor(() => {
         const sayNoElements = screen.getAllByText('SAY NO')
         expect(sayNoElements.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('shows PARK IT for low value, low effort', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores: Reach=3, Impact=3, Effort=3, Confidence=5
+      // Value = 3×3 = 9 (Low Value), Effort=3 (Low) → PARK IT
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '3' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '3' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '3' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '5' } }) // Confidence
+
+      await waitFor(() => {
+        const parkItElements = screen.getAllByText('PARK IT')
+        expect(parkItElements.length).toBeGreaterThan(0)
       })
     })
   })
