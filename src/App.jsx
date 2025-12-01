@@ -213,7 +213,7 @@ export default function WorthsmithApp() {
                 {step === 1 && <OutcomeStep value={draft.outcome} onChange={v => updateDraft({ outcome: v })} expressMode={expressMode} />}
                 {step === 2 && !expressMode && <BeneficiaryStep value={draft.beneficiary} onChange={v => updateDraft({ beneficiary: v })} />}
                 {step === 3 && !expressMode && <ImpactStep value={draft.nonDelivery} onChange={v => updateDraft({ nonDelivery: v })} />}
-                {step === 4 && <AlternativesStep value={draft.alternatives} onChange={v => updateDraft({ alternatives: v })} expressMode={expressMode} />}
+                {step === 4 && <AlternativesStep value={draft.alternatives} onChange={v => updateDraft({ alternatives: v })} expressMode={expressMode} outcome={draft.outcome} />}
                 {step === 5 && <ScoringStep draft={draft} onChange={updateDraft} />}
                 {step === 6 && <OutputStep draft={draft} onReset={resetDraft} expressMode={expressMode} />}
               </div>
@@ -744,7 +744,61 @@ function ImpactStep({ value, onChange }) {
   );
 }
 
-function AlternativesStep({ value, onChange, expressMode }) {
+function AlternativesStep({ value, onChange, expressMode, outcome }) {
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
+  async function suggestAlternatives() {
+    setIsLoadingAI(true);
+    setAiError(null);
+
+    try {
+      console.log("Calling backend API...");
+
+      const response = await fetch("/api/suggest-alternatives", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          outcome: outcome || "",
+          existingAlternatives: value || ""
+        })
+      });
+
+      console.log("Response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("Response body:", responseText);
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { error: responseText };
+        }
+        console.error("API error response:", errorData);
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
+
+      const data = JSON.parse(responseText);
+      console.log("API response received");
+
+      const aiSuggestions = data.suggestions;
+
+      // Append AI suggestions with clear separator
+      const separator = value ? "\n\n---\n🤖 AI Suggestions:\n" : "🤖 AI Suggestions:\n";
+      onChange(value + separator + aiSuggestions);
+
+    } catch (error) {
+      console.error("AI suggestion error:", error);
+      setAiError(error.message || "Could not generate suggestions. Please try again.");
+    } finally {
+      setIsLoadingAI(false);
+    }
+  }
+
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex items-start gap-3">
@@ -770,12 +824,44 @@ function AlternativesStep({ value, onChange, expressMode }) {
         </ul>
       </div>
 
-      <textarea
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder="e.g., Update checkout copy to clarify costs; Add FAQ section; Run A/B test with simplified flow; Do nothing and measure impact for 2 weeks..."
-        className="w-full h-32 px-4 py-3 border-2 border-slate-200 rounded-lg focus:border-sky-500 focus:outline-none resize-none transition-colors"
-      />
+      <div className="relative">
+        <textarea
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="e.g., Update checkout copy to clarify costs; Add FAQ section; Run A/B test with simplified flow; Do nothing and measure impact for 2 weeks..."
+          className="w-full h-32 px-4 py-3 border-2 border-slate-200 rounded-lg focus:border-sky-500 focus:outline-none resize-none transition-colors"
+          disabled={isLoadingAI}
+        />
+
+        <div className="mt-3 flex items-start gap-3">
+          <button
+            onClick={suggestAlternatives}
+            disabled={isLoadingAI}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoadingAI ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                AI Thinking...
+              </>
+            ) : (
+              <>
+                ✨ Suggest Alternatives
+              </>
+            )}
+          </button>
+
+          {aiError && (
+            <div className="flex-1 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {aiError}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-2 text-xs text-slate-500">
+          💡 Tip: Type your own alternatives first, then use AI to generate more ideas. Use bullets: "• " or "- "
+        </div>
+      </div>
     </div>
   );
 }
