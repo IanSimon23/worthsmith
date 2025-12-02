@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Lightbulb, Users, AlertTriangle, GitBranch, Target, CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Sparkles, Eye } from "lucide-react";
+import { Lightbulb, Users, AlertTriangle, GitBranch, Target, CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Sparkles, Eye, ArrowUpDown } from "lucide-react";
 
 export default function WorthsmithApp() {
   const [step, setStep] = useState(1);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showComparison, setShowComparison] = useState(false);
   const [expressMode, setExpressMode] = useState(() => {
     try {
       const saved = localStorage.getItem("worthsmith-express-mode");
@@ -135,6 +136,12 @@ export default function WorthsmithApp() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setShowComparison(!showComparison)}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border-2 border-indigo-200 hover:border-indigo-300"
+              >
+                📊 {showComparison ? 'Back to Editor' : 'Compare Stories'}
+              </button>
+              <button
                 onClick={() => setExpressMode(!expressMode)}
                 className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors ${
                   expressMode
@@ -170,7 +177,7 @@ export default function WorthsmithApp() {
         </div>
 
         {/* Progress Bar */}
-        {step < 6 && (
+        {!showComparison && step < 6 && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6 transition-all hover:shadow-xl">
             <div className="flex items-center justify-between mb-2">
               {(expressMode ? EXPRESS_STEPS : STEPS).map((s, i) => {
@@ -206,7 +213,10 @@ export default function WorthsmithApp() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {showComparison ? (
+          <ComparisonView stories={savedStories} />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className={`${step < 6 && showSidebar ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
             <div className="bg-white rounded-2xl shadow-lg p-8 transition-all hover:shadow-xl">
@@ -259,6 +269,7 @@ export default function WorthsmithApp() {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
@@ -992,6 +1003,169 @@ function OutputStep({ draft, onReset, expressMode }) {
         >
           Start New Story
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ComparisonView({ stories }) {
+  const [sortConfig, setSortConfig] = useState({ key: 'value', direction: 'desc' });
+
+  if (stories.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+        <div className="text-6xl mb-4">📊</div>
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">No Stories to Compare</h2>
+        <p className="text-slate-600">Save some stories first to see them compared here.</p>
+      </div>
+    );
+  }
+
+  // Prepare stories with calculated values
+  const enrichedStories = stories.map(story => ({
+    ...story,
+    value: story.reach * story.impact,
+    riceScore: calculateRICE(story.reach, story.impact, story.confidence, story.effort),
+    recommendation: getDecisionRecommendation(story.reach, story.impact, story.effort, story.confidence)
+  }));
+
+  // Sort stories
+  const sortedStories = [...enrichedStories].sort((a, b) => {
+    let aVal = a[sortConfig.key];
+    let bVal = b[sortConfig.key];
+
+    // Handle recommendation sorting by title
+    if (sortConfig.key === 'recommendation') {
+      aVal = a.recommendation.title;
+      bVal = b.recommendation.title;
+    }
+
+    if (aVal < bVal) {
+      return sortConfig.direction === 'asc' ? -1 : 1;
+    }
+    if (aVal > bVal) {
+      return sortConfig.direction === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const getRecommendationColor = (title) => {
+    if (title === "DO NOW" || title === "QUICK WIN") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (title === "DO NEXT" || title === "STRATEGIC BET" || title === "SPIKE FIRST") return "bg-blue-50 text-blue-700 border-blue-200";
+    if (title === "VALIDATE FIRST" || title === "VALIDATE ASSUMPTIONS" || title === "CONSIDER ALTERNATIVES" || title === "EVALUATE FURTHER") return "bg-amber-50 text-amber-700 border-amber-200";
+    if (title === "SAY NO") return "bg-red-50 text-red-700 border-red-200";
+    return "bg-slate-50 text-slate-700 border-slate-200";
+  };
+
+  const SortButton = ({ column, label }) => (
+    <button
+      onClick={() => handleSort(column)}
+      className="flex items-center gap-1 hover:text-sky-600 transition-colors"
+    >
+      {label}
+      <ArrowUpDown className={`w-3 h-3 ${sortConfig.key === column ? 'text-sky-600' : 'text-slate-400'}`} />
+    </button>
+  );
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-8">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-slate-800">Story Comparison</h2>
+        <p className="text-slate-600 mt-1">Compare and prioritize your saved stories • Click column headers to sort</p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b-2 border-slate-200">
+              <th className="text-left py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="title" label="Story Title" />
+              </th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="reach" label="Reach" />
+              </th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="impact" label="Impact" />
+              </th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="effort" label="Effort" />
+              </th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="confidence" label="Confidence" />
+              </th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="value" label="Value (R×I)" />
+              </th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="riceScore" label="RICE" />
+              </th>
+              <th className="text-left py-3 px-4 font-semibold text-slate-700">
+                <SortButton column="recommendation" label="Recommendation" />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedStories.map((story, idx) => (
+              <tr
+                key={story.id}
+                className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
+              >
+                <td className="py-4 px-4">
+                  <div className="font-medium text-slate-800">{story.title}</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {new Date(story.timestamp).toLocaleDateString()}
+                  </div>
+                </td>
+                <td className="text-center py-4 px-4">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-semibold text-sm">
+                    {story.reach}
+                  </span>
+                </td>
+                <td className="text-center py-4 px-4">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 font-semibold text-sm">
+                    {story.impact}
+                  </span>
+                </td>
+                <td className="text-center py-4 px-4">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-700 font-semibold text-sm">
+                    {story.effort}
+                  </span>
+                </td>
+                <td className="text-center py-4 px-4">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-semibold text-sm">
+                    {story.confidence}
+                  </span>
+                </td>
+                <td className="text-center py-4 px-4">
+                  <div className="font-bold text-slate-800 text-lg">{story.value}</div>
+                  <div className="text-xs text-slate-500">
+                    {story.value >= 49 ? 'High' : story.value >= 16 ? 'Med' : 'Low'}
+                  </div>
+                </td>
+                <td className="text-center py-4 px-4">
+                  <div className="font-bold text-slate-800 text-lg">{story.riceScore}</div>
+                </td>
+                <td className="py-4 px-4">
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border ${getRecommendationColor(story.recommendation.title)}`}>
+                    <span>{story.recommendation.icon}</span>
+                    <span className="font-semibold text-sm">{story.recommendation.title}</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-6 pt-6 border-t border-slate-200 text-sm text-slate-600">
+        <strong>Tip:</strong> Click column headers to sort. Default sort is by Value (highest first).
       </div>
     </div>
   );
