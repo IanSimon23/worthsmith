@@ -945,9 +945,226 @@ function ScoreSlider({ label, value, onChange, color, description }) {
   );
 }
 
+function ValueCanvas({ data, draft, onBack }) {
+  const decision = getDecisionRecommendation(draft.reach, draft.impact, draft.effort, draft.confidence);
+  const value = draft.reach * draft.impact;
+  const riceScore = calculateRICE(draft.reach, draft.impact, draft.confidence, draft.effort);
+
+  function downloadCanvas() {
+    // For now, we'll just copy the content. In the future, could generate PDF/PNG
+    alert("Canvas download feature coming soon! For now, use your browser's print-to-PDF feature.");
+    window.print();
+  }
+
+  return (
+    <div className="space-y-6 animate-fadeIn print:p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between print:hidden">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Value Statement
+        </button>
+        <button
+          onClick={downloadCanvas}
+          className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all"
+        >
+          📄 Print / Save as PDF
+        </button>
+      </div>
+
+      {/* Canvas Container */}
+      <div className="bg-white rounded-2xl shadow-lg p-8 print:shadow-none">
+        {/* Title */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">Story Value Canvas</h1>
+          <p className="text-slate-600">{draft.outcome || 'Untitled Story'}</p>
+        </div>
+
+        {/* Main Canvas - Two Sides */}
+        <div className="grid md:grid-cols-2 gap-8 mb-8">
+          {/* LEFT SIDE: Value Proposition */}
+          <div className="border-4 border-sky-500 rounded-2xl p-6 bg-sky-50">
+            <h2 className="text-xl font-bold text-sky-800 mb-6 text-center">Value Proposition</h2>
+            <div className="space-y-6">
+              {/* Gain Creators */}
+              <div className="bg-white rounded-lg p-4 border-2 border-emerald-200">
+                <h3 className="font-semibold text-emerald-700 mb-3 flex items-center gap-2">
+                  <span className="text-xl">📈</span>
+                  Gain Creators
+                </h3>
+                <ul className="space-y-2">
+                  {data.gainCreators.map((item, idx) => (
+                    <li key={idx} className="text-sm text-slate-700 flex gap-2">
+                      <span className="text-emerald-600 font-bold">+</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Products & Services */}
+              <div className="bg-white rounded-lg p-4 border-2 border-sky-200">
+                <h3 className="font-semibold text-sky-700 mb-3 flex items-center gap-2">
+                  <span className="text-xl">📦</span>
+                  Products & Services
+                </h3>
+                <p className="text-sm text-slate-700 font-medium">{data.solution}</p>
+              </div>
+
+              {/* Pain Relievers */}
+              <div className="bg-white rounded-lg p-4 border-2 border-red-200">
+                <h3 className="font-semibold text-red-700 mb-3 flex items-center gap-2">
+                  <span className="text-xl">💊</span>
+                  Pain Relievers
+                </h3>
+                <ul className="space-y-2">
+                  {data.painRelievers.map((item, idx) => (
+                    <li key={idx} className="text-sm text-slate-700 flex gap-2">
+                      <span className="text-red-600 font-bold">−</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT SIDE: Customer Segment */}
+          <div className="border-4 border-purple-500 rounded-2xl p-6 bg-purple-50">
+            <h2 className="text-xl font-bold text-purple-800 mb-6 text-center">Customer Segment</h2>
+            <div className="mb-4 text-center">
+              <span className="inline-block bg-purple-200 text-purple-800 px-4 py-2 rounded-lg font-semibold">
+                {draft.beneficiary || 'Target Users'}
+              </span>
+            </div>
+            <div className="space-y-6">
+              {/* Gains */}
+              <div className="bg-white rounded-lg p-4 border-2 border-emerald-200">
+                <h3 className="font-semibold text-emerald-700 mb-3 flex items-center gap-2">
+                  <span className="text-xl">😊</span>
+                  Gains
+                </h3>
+                <ul className="space-y-2">
+                  {data.gains.map((item, idx) => (
+                    <li key={idx} className="text-sm text-slate-700 flex gap-2">
+                      <span className="text-emerald-600">✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Customer Jobs */}
+              <div className="bg-white rounded-lg p-4 border-2 border-purple-200">
+                <h3 className="font-semibold text-purple-700 mb-3 flex items-center gap-2">
+                  <span className="text-xl">🎯</span>
+                  Customer Jobs
+                </h3>
+                <ul className="space-y-2">
+                  {data.customerJobs.map((item, idx) => (
+                    <li key={idx} className="text-sm text-slate-700 flex gap-2">
+                      <span className="text-purple-600">→</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Pains */}
+              <div className="bg-white rounded-lg p-4 border-2 border-red-200">
+                <h3 className="font-semibold text-red-700 mb-3 flex items-center gap-2">
+                  <span className="text-xl">😞</span>
+                  Pains
+                </h3>
+                <ul className="space-y-2">
+                  {data.pains.map((item, idx) => (
+                    <li key={idx} className="text-sm text-slate-700 flex gap-2">
+                      <span className="text-red-600">✗</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Section: Alternatives & Metrics */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Alternatives Considered */}
+          <div className="bg-slate-50 border-2 border-slate-200 rounded-xl p-6">
+            <h3 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+              <GitBranch className="w-5 h-5" />
+              Alternatives Considered
+            </h3>
+            <p className="text-sm text-slate-700 whitespace-pre-wrap">{draft.alternatives || 'Not specified'}</p>
+          </div>
+
+          {/* Value Metrics */}
+          <div className="bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-sky-200 rounded-xl p-6">
+            <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <Target className="w-5 h-5" />
+              Value Metrics & Recommendation
+            </h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div>
+                  <div className="text-xs text-slate-600">Reach</div>
+                  <div className="text-lg font-bold text-purple-600">{draft.reach}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Impact</div>
+                  <div className="text-lg font-bold text-emerald-600">{draft.impact}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Effort</div>
+                  <div className="text-lg font-bold text-orange-600">{draft.effort}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Confidence</div>
+                  <div className="text-lg font-bold text-blue-600">{draft.confidence}</div>
+                </div>
+              </div>
+              <div className="pt-3 border-t border-slate-200">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-slate-600">Value Score (R×I):</span>
+                  <span className="font-bold text-sky-600">{value}</span>
+                </div>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm text-slate-600">RICE Score:</span>
+                  <span className="font-bold text-slate-600">{riceScore}</span>
+                </div>
+                <div className="bg-white rounded-lg p-3 border-2 border-sky-300">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xl">{decision.icon}</span>
+                    <span className="font-bold text-sky-700">{decision.title}</span>
+                  </div>
+                  <p className="text-xs text-slate-600">{decision.desc}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
+          Generated by Worthsmith • {new Date().toLocaleDateString()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OutputStep({ draft, onReset, expressMode }) {
   const output = generateValueStatement(draft, expressMode);
   const [copied, setCopied] = useState(false);
+  const [showCanvas, setShowCanvas] = useState(false);
+  const [canvasData, setCanvasData] = useState(null);
+  const [isGeneratingCanvas, setIsGeneratingCanvas] = useState(false);
+  const [canvasError, setCanvasError] = useState(null);
 
   function copyToClipboard() {
     navigator.clipboard.writeText(output);
@@ -963,6 +1180,60 @@ function OutputStep({ draft, onReset, expressMode }) {
     a.download = 'worthsmith-value-statement.md';
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function generateValueCanvas() {
+    setIsGeneratingCanvas(true);
+    setCanvasError(null);
+
+    try {
+      console.log("Calling backend API for canvas generation...");
+
+      const response = await fetch("/api/generate-canvas", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          outcome: draft.outcome || 'Not specified',
+          beneficiary: draft.beneficiary || 'Not specified',
+          nonDelivery: draft.nonDelivery || 'Not specified',
+          alternatives: draft.alternatives || 'Not specified'
+        })
+      });
+
+      console.log("Response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("Response body:", responseText);
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { error: responseText };
+        }
+        console.error("API error response:", errorData);
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
+
+      const data = JSON.parse(responseText);
+      console.log("API response received");
+
+      setCanvasData(data.canvas);
+      setShowCanvas(true);
+
+    } catch (error) {
+      console.error("Canvas generation error:", error);
+      setCanvasError(error.message || "Could not generate Value Canvas. Please try again.");
+    } finally {
+      setIsGeneratingCanvas(false);
+    }
+  }
+
+  if (showCanvas && canvasData) {
+    return <ValueCanvas data={canvasData} draft={draft} onBack={() => setShowCanvas(false)} />;
   }
 
   return (
@@ -998,12 +1269,32 @@ function OutputStep({ draft, onReset, expressMode }) {
           Download .md
         </button>
         <button
+          onClick={generateValueCanvas}
+          disabled={isGeneratingCanvas}
+          className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isGeneratingCanvas ? (
+            <span className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Generating Canvas...
+            </span>
+          ) : (
+            '🎨 Generate Value Canvas'
+          )}
+        </button>
+        <button
           onClick={onReset}
           className="px-6 py-3 text-slate-600 hover:text-sky-600 font-medium transition-colors"
         >
           Start New Story
         </button>
       </div>
+
+      {canvasError && (
+        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 text-center">
+          {canvasError}
+        </div>
+      )}
     </div>
   );
 }

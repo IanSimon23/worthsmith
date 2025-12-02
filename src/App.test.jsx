@@ -736,4 +736,691 @@ describe('WorthsmithApp', () => {
       })
     })
   })
+
+  describe('Comparison View', () => {
+    beforeEach(() => {
+      // Create some test stories in localStorage
+      const testStories = [
+        {
+          id: 1,
+          title: 'High Value Story',
+          timestamp: '2024-12-01T10:00:00.000Z',
+          outcome: 'Test outcome 1',
+          beneficiary: 'Test users 1',
+          nonDelivery: 'Test impact 1',
+          alternatives: 'Test alternatives 1',
+          reach: 8,
+          impact: 8,
+          effort: 3,
+          confidence: 7
+        },
+        {
+          id: 2,
+          title: 'Medium Value Story',
+          timestamp: '2024-12-01T11:00:00.000Z',
+          outcome: 'Test outcome 2',
+          beneficiary: 'Test users 2',
+          nonDelivery: 'Test impact 2',
+          alternatives: 'Test alternatives 2',
+          reach: 5,
+          impact: 5,
+          effort: 2,
+          confidence: 7
+        },
+        {
+          id: 3,
+          title: 'Low Value Story',
+          timestamp: '2024-12-01T12:00:00.000Z',
+          outcome: 'Test outcome 3',
+          beneficiary: 'Test users 3',
+          nonDelivery: 'Test impact 3',
+          alternatives: 'Test alternatives 3',
+          reach: 3,
+          impact: 3,
+          effort: 8,
+          confidence: 5
+        }
+      ]
+      localStorageMock.setItem('worthsmith-stories', JSON.stringify(testStories))
+    })
+
+    it('shows Compare Stories button in header', () => {
+      render(<WorthsmithApp />)
+      // Use getByText instead of getByRole since it might not have a specific role
+      expect(screen.getByText(/Compare Stories/i)).toBeInTheDocument()
+    })
+
+    it('switches to comparison view when button clicked', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      const compareButton = screen.getByText(/Compare Stories/i)
+      await user.click(compareButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Story Comparison')).toBeInTheDocument()
+      })
+    })
+
+    it('shows Back to Editor button in comparison view', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText(/Back to Editor/i)).toBeInTheDocument()
+      })
+    })
+
+    it('returns to editor when Back to Editor clicked', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText(/Back to Editor/i)).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Back to Editor/i))
+
+      await waitFor(() => {
+        expect(screen.getByText(/What outcome are we pursuing/i)).toBeInTheDocument()
+      })
+    })
+
+    it('displays all saved stories in table', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('High Value Story')).toBeInTheDocument()
+        expect(screen.getByText('Medium Value Story')).toBeInTheDocument()
+        expect(screen.getByText('Low Value Story')).toBeInTheDocument()
+      })
+    })
+
+    it('displays correct column headers', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('Story Title')).toBeInTheDocument()
+        expect(screen.getByText('Reach')).toBeInTheDocument()
+        expect(screen.getByText('Impact')).toBeInTheDocument()
+        expect(screen.getByText('Effort')).toBeInTheDocument()
+        expect(screen.getByText('Confidence')).toBeInTheDocument()
+        expect(screen.getByText('Value (R×I)')).toBeInTheDocument()
+        expect(screen.getByText('RICE')).toBeInTheDocument()
+        expect(screen.getByText('Recommendation')).toBeInTheDocument()
+      })
+    })
+
+    it('calculates Value correctly (R×I)', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        // High Value Story: 8×8 = 64
+        expect(screen.getByText('High Value Story')).toBeInTheDocument()
+      })
+
+      const highValueRow = screen.getByText('High Value Story').closest('tr')
+      expect(highValueRow).toHaveTextContent('64')
+    })
+
+    it('calculates RICE correctly', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('High Value Story')).toBeInTheDocument()
+      })
+
+      // High Value Story: (8×8×7)/3 = 149
+      const highValueRow = screen.getByText('High Value Story').closest('tr')
+      expect(highValueRow).toHaveTextContent('149')
+    })
+
+    it('shows correct recommendations', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        // High Value (64), Low Effort (3), High Confidence (7) = DO NOW
+        expect(screen.getByText('DO NOW')).toBeInTheDocument()
+
+        // Medium Value (25), Low Effort (2), High Confidence (7) = QUICK WIN
+        expect(screen.getByText('QUICK WIN')).toBeInTheDocument()
+      })
+    })
+
+    it('sorts by default (Value descending)', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('High Value Story')).toBeInTheDocument()
+      })
+
+      const rows = screen.getAllByRole('row')
+      // First row is header, second should be High Value (64)
+      expect(rows[1]).toHaveTextContent('High Value Story')
+      expect(rows[1]).toHaveTextContent('64')
+    })
+
+    it('shows empty state when no stories saved', async () => {
+      localStorageMock.clear()
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('No Stories to Compare')).toBeInTheDocument()
+      })
+    })
+
+    it('hides progress bar in comparison view', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Progress bar should be visible initially
+      expect(screen.getAllByText('Outcome').length).toBeGreaterThan(0)
+
+      await user.click(screen.getByText(/Compare Stories/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('Story Comparison')).toBeInTheDocument()
+      })
+
+      // Progress bar should be hidden in comparison view
+      // "Outcome" might still appear in sidebar but not in progress bar
+      const outcomeElements = screen.queryAllByText('Outcome')
+      // Should be fewer instances when progress bar is hidden
+      expect(outcomeElements.length).toBeLessThanOrEqual(1)
+    })
+  })
+
+  describe('Value Canvas Generation', () => {
+    beforeEach(() => {
+      // Mock fetch for canvas generation API - configure with default resolution
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => JSON.stringify({ alternatives: [] })
+      })
+    })
+
+    it('shows Generate Value Canvas button on output step', async () => {
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate through all steps with form data
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      // On scoring step, set scores and generate
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      // Wait for output step to load
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      // Look for canvas button using text instead of role
+      expect(screen.getByText(/Generate Value Canvas/i)).toBeInTheDocument()
+    })
+
+    it('calls API when Generate Value Canvas clicked', async () => {
+      const mockCanvasData = {
+        customerJobs: ['Job 1', 'Job 2', 'Job 3'],
+        pains: ['Pain 1', 'Pain 2', 'Pain 3'],
+        gains: ['Gain 1', 'Gain 2', 'Gain 3'],
+        solution: 'Test solution',
+        painRelievers: ['Reliever 1', 'Reliever 2', 'Reliever 3'],
+        gainCreators: ['Creator 1', 'Creator 2', 'Creator 3']
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({ canvas: mockCanvasData })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate with form data
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      const canvasButton = screen.getByText(/Generate Value Canvas/i)
+      await user.click(canvasButton)
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/generate-canvas',
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          })
+        )
+      })
+    })
+
+    it('shows loading state while generating canvas', async () => {
+      global.fetch.mockImplementationOnce(() =>
+        new Promise(resolve => setTimeout(() => resolve({
+          ok: true,
+          text: async () => JSON.stringify({
+            canvas: {
+              customerJobs: ['Job 1'],
+              pains: ['Pain 1'],
+              gains: ['Gain 1'],
+              solution: 'Test',
+              painRelievers: ['Reliever 1'],
+              gainCreators: ['Creator 1']
+            }
+          })
+        }), 100))
+      )
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Wait for component to be ready
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      // Check for loading text
+      await waitFor(() => {
+        expect(screen.getByText(/Generating Canvas/i)).toBeInTheDocument()
+      })
+    })
+
+    it('displays canvas after successful generation', async () => {
+      const mockCanvasData = {
+        customerJobs: ['Complete purchase', 'Understand costs', 'Make decision'],
+        pains: ['Unexpected fees', 'Cart abandonment', 'Distrust'],
+        gains: ['Transparent pricing', 'Confident checkout', 'No surprises'],
+        solution: 'Display shipping costs upfront',
+        painRelievers: ['Eliminates surprises', 'Provides transparency', 'Reduces friction'],
+        gainCreators: ['Builds trust', 'Enables decisions', 'Improves experience']
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({ canvas: mockCanvasData })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Wait for component to be ready
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('Story Value Canvas')).toBeInTheDocument()
+      })
+
+      // Check for canvas sections
+      expect(screen.getByText('Value Proposition')).toBeInTheDocument()
+      expect(screen.getByText('Customer Segment')).toBeInTheDocument()
+      expect(screen.getByText('Gain Creators')).toBeInTheDocument()
+      expect(screen.getByText('Pain Relievers')).toBeInTheDocument()
+      expect(screen.getByText('Customer Jobs')).toBeInTheDocument()
+      expect(screen.getByText('Gains')).toBeInTheDocument()
+      expect(screen.getByText('Pains')).toBeInTheDocument()
+    })
+
+    it('displays canvas content correctly', async () => {
+      const mockCanvasData = {
+        customerJobs: ['Complete purchase'],
+        pains: ['Unexpected fees'],
+        gains: ['Transparent pricing'],
+        solution: 'Display shipping costs upfront',
+        painRelievers: ['Eliminates surprises'],
+        gainCreators: ['Builds trust']
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({ canvas: mockCanvasData })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Wait for component to be ready
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete purchase')).toBeInTheDocument()
+        expect(screen.getByText('Unexpected fees')).toBeInTheDocument()
+        expect(screen.getByText('Transparent pricing')).toBeInTheDocument()
+        expect(screen.getByText('Display shipping costs upfront')).toBeInTheDocument()
+        expect(screen.getByText('Eliminates surprises')).toBeInTheDocument()
+        expect(screen.getByText('Builds trust')).toBeInTheDocument()
+      })
+    })
+
+    it('shows Back to Value Statement button in canvas view', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({
+          canvas: {
+            customerJobs: ['Job'],
+            pains: ['Pain'],
+            gains: ['Gain'],
+            solution: 'Solution',
+            painRelievers: ['Reliever'],
+            gainCreators: ['Creator']
+          }
+        })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Wait for component to be ready
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      await waitFor(() => {
+        expect(screen.getByText(/Back to Value Statement/i)).toBeInTheDocument()
+      })
+    })
+
+    it('returns to output step when Back clicked', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({
+          canvas: {
+            customerJobs: ['Job'],
+            pains: ['Pain'],
+            gains: ['Gain'],
+            solution: 'Solution',
+            painRelievers: ['Reliever'],
+            gainCreators: ['Creator']
+          }
+        })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Wait for component to be ready
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      await waitFor(() => {
+        expect(screen.getByText(/Back to Value Statement/i)).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Back to Value Statement/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+    })
+
+    it('displays error message when API fails', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => JSON.stringify({ error: 'API error' })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Wait for component to be ready
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Reduce checkout abandonment/i)).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByPlaceholderText(/Reduce checkout abandonment/i), 'Test outcome')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/First-time customers/i), 'Test users')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/We continue losing/i), 'Test impact')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.type(screen.getByPlaceholderText(/Update checkout copy/i), 'Test alternatives')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '6' } })
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      await waitFor(() => {
+        expect(screen.getByText(/Could not generate|error/i)).toBeInTheDocument()
+      }, { timeout: 5000 })
+    })
+
+    it('includes RICE scores in canvas', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({
+          canvas: {
+            customerJobs: ['Job'],
+            pains: ['Pain'],
+            gains: ['Gain'],
+            solution: 'Solution',
+            painRelievers: ['Reliever'],
+            gainCreators: ['Creator']
+          }
+        })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      // Navigate to scoring and set scores
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '8' } }) // Reach
+      fireEvent.change(sliders[1], { target: { value: '8' } }) // Impact
+      fireEvent.change(sliders[2], { target: { value: '3' } }) // Effort
+      fireEvent.change(sliders[3], { target: { value: '7' } }) // Confidence
+
+      // Click Generate Statement button
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      await waitFor(() => {
+        expect(screen.getByText('Story Value Canvas')).toBeInTheDocument()
+      })
+
+      // Check for scores in canvas - they appear multiple times, just verify they exist
+      expect(screen.getByText('64')).toBeInTheDocument() // Value (8×8)
+      expect(screen.getByText('149')).toBeInTheDocument() // RICE
+    })
+
+    it('includes recommendation in canvas', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({
+          canvas: {
+            customerJobs: ['Job'],
+            pains: ['Pain'],
+            gains: ['Gain'],
+            solution: 'Solution',
+            painRelievers: ['Reliever'],
+            gainCreators: ['Creator']
+          }
+        })
+      })
+
+      render(<WorthsmithApp />)
+      const user = userEvent.setup()
+
+      for (let i = 0; i < 4; i++) {
+        await user.click(screen.getByRole('button', { name: /Next/i }))
+      }
+
+      // Set scores for DO NOW: High Value + Low Effort + High Confidence
+      const sliders = screen.getAllByRole('slider')
+      fireEvent.change(sliders[0], { target: { value: '8' } })
+      fireEvent.change(sliders[1], { target: { value: '8' } })
+      fireEvent.change(sliders[2], { target: { value: '3' } })
+      fireEvent.change(sliders[3], { target: { value: '7' } })
+
+      // Click Generate Statement button
+      await user.click(screen.getByRole('button', { name: /Generate Statement/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Value Statement Ready')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText(/Generate Value Canvas/i))
+
+      await waitFor(() => {
+        const doNowElements = screen.getAllByText('DO NOW')
+        expect(doNowElements.length).toBeGreaterThan(0)
+      })
+    })
+  })
 })
