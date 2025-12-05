@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Lightbulb, Users, AlertTriangle, GitBranch, Target, CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Sparkles, Eye, ArrowUpDown } from "lucide-react";
+import FeedbackButton from "./FeedbackButton";
+import FeedbackPanel from "./FeedbackPanel";
 
 export default function WorthsmithApp() {
   const [step, setStep] = useState(1);
@@ -11,6 +13,14 @@ export default function WorthsmithApp() {
       return saved ? JSON.parse(saved) : false;
     } catch {
       return false;
+    }
+  });
+  const [scoringMethod, setScoringMethod] = useState(() => {
+    try {
+      const saved = localStorage.getItem("worthsmith-scoring-method");
+      return saved || "RICE"; // Default to RICE for existing users
+    } catch {
+      return "RICE";
     }
   });
   const [savedStories, setSavedStories] = useState(() => {
@@ -30,6 +40,17 @@ export default function WorthsmithApp() {
     }
   });
 
+  // AI Feedback state
+  const [feedback, setFeedback] = useState(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+
+  // Story management state
+  const [currentStoryId, setCurrentStoryId] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [toast, setToast] = useState({ message: '', visible: false });
+
   useEffect(() => {
     localStorage.setItem("worthsmith-draft", JSON.stringify(draft));
   }, [draft]);
@@ -42,32 +63,131 @@ export default function WorthsmithApp() {
     localStorage.setItem("worthsmith-express-mode", JSON.stringify(expressMode));
   }, [expressMode]);
 
-  function saveStory() {
-    const title = prompt("Give this story a title:");
+  useEffect(() => {
+    localStorage.setItem("worthsmith-scoring-method", scoringMethod);
+  }, [scoringMethod]);
+
+  // Track unsaved changes
+  useEffect(() => {
+    if (!currentStoryId) {
+      setHasUnsavedChanges(false);
+      return;
+    }
+
+    const loadedStory = savedStories.find(s => s.id === currentStoryId);
+    if (!loadedStory) return;
+
+    const isDifferent =
+      draft.outcome !== loadedStory.outcome ||
+      draft.beneficiary !== loadedStory.beneficiary ||
+      draft.nonDelivery !== loadedStory.nonDelivery ||
+      draft.alternatives !== loadedStory.alternatives ||
+      draft.reach !== loadedStory.reach ||
+      draft.impact !== loadedStory.impact ||
+      draft.effort !== loadedStory.effort ||
+      draft.confidence !== loadedStory.confidence ||
+      draft.valueScore !== loadedStory.valueScore ||
+      draft.urgencyScore !== loadedStory.urgencyScore ||
+      draft.sizeScore !== loadedStory.sizeScore;
+
+    setHasUnsavedChanges(isDifferent);
+  }, [draft, currentStoryId, savedStories]);
+
+  // Helper function for toast notifications
+  function showToast(message, duration = 3000) {
+    setToast({ message, visible: true });
+    setTimeout(() => setToast({ message: '', visible: false }), duration);
+  }
+
+  // Helper function for relative time formatting
+  function formatRelativeTime(timestamp) {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const seconds = Math.floor((now - then) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return then.toLocaleDateString();
+  }
+
+  // Update existing story
+  function updateStory() {
+    if (!currentStoryId) return;
+
+    setSavedStories(prev => prev.map(s =>
+      s.id === currentStoryId
+        ? {
+            ...s,
+            ...draft,
+            lastModified: new Date().toISOString()
+          }
+        : s
+    ));
+    setHasUnsavedChanges(false);
+    showToast("✓ Story updated!");
+  }
+
+  // Save as new story
+  function saveAsNew() {
+    const title = prompt(currentStoryId ? "Title for new copy:" : "Give this story a title:");
     if (!title) return;
 
     const story = {
       id: Date.now(),
       title,
-      timestamp: new Date().toISOString(),
+      created: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
       ...draft
     };
 
     setSavedStories(prev => [story, ...prev]);
-    alert("Story saved!");
+    setCurrentStoryId(story.id);
+    setHasUnsavedChanges(false);
+    showToast(currentStoryId ? "✓ Saved as new story!" : "✓ Story saved!");
   }
 
+  // Load existing story
   function loadStory(story) {
-    if (confirm(`Load "${story.title}"? This will replace your current draft.`)) {
-      const { id, title, timestamp, ...storyData } = story;
-      setDraft(storyData);
-      setStep(1);
+    if (hasUnsavedChanges) {
+      if (!confirm(`You have unsaved changes. Load "${story.title}" anyway?`)) {
+        return;
+      }
     }
+
+    const { id, title, created, lastModified, timestamp, ...storyData } = story;
+    setDraft(storyData);
+    setCurrentStoryId(id);
+    setStep(1);
+    setHasUnsavedChanges(false);
+    showToast(`Loaded "${title}"`);
   }
 
+  // Start new story
+  function startNewStory() {
+    if (hasUnsavedChanges) {
+      if (!confirm("You have unsaved changes. Start new story anyway?")) {
+        return;
+      }
+    }
+
+    setDraft(getInitialDraft());
+    setCurrentStoryId(null);
+    setStep(1);
+    setHasUnsavedChanges(false);
+    showToast("Started new story");
+  }
+
+  // Delete story
   function deleteStory(storyId, storyTitle) {
     if (confirm(`Delete "${storyTitle}"? This cannot be undone.`)) {
       setSavedStories(prev => prev.filter(s => s.id !== storyId));
+      if (currentStoryId === storyId) {
+        setCurrentStoryId(null);
+        setHasUnsavedChanges(false);
+      }
+      showToast("Story deleted");
     }
   }
 
@@ -78,7 +198,9 @@ export default function WorthsmithApp() {
   function resetDraft() {
     if (confirm("Reset all fields? This cannot be undone.")) {
       setDraft(getInitialDraft());
+      setCurrentStoryId(null);
       setStep(1);
+      setHasUnsavedChanges(false);
     }
   }
 
@@ -93,6 +215,108 @@ export default function WorthsmithApp() {
       effort: 3,
       confidence: 7
     });
+    setCurrentStoryId(null);
+    setHasUnsavedChanges(false);
+  }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyPress(e) {
+      // Cmd+S / Ctrl+S = Save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (currentStoryId && hasUnsavedChanges) {
+          updateStory();
+        } else if (!currentStoryId) {
+          saveAsNew();
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [currentStoryId, hasUnsavedChanges]);
+
+  // AI Feedback functions
+  async function handleGetFeedback() {
+    setFeedbackLoading(true);
+    setFeedbackError(null);
+    setShowFeedback(false);
+
+    try {
+      // Map step numbers to step names
+      const stepNames = {
+        1: 'outcome',
+        2: 'beneficiary',
+        3: 'current-method',
+        4: 'alternatives',
+        5: 'scoring'
+      };
+      const currentStepName = stepNames[step];
+
+      // Build form data
+      const formData = {
+        outcome: draft.outcome,
+        beneficiary: draft.beneficiary,
+        currentMethod: draft.nonDelivery, // Note: nonDelivery is the current method field
+        alternatives: draft.alternatives,
+        scores: {
+          reach: draft.reach,
+          impact: draft.impact,
+          effort: draft.effort,
+          confidence: draft.confidence
+        }
+      };
+
+      console.log('Requesting feedback for step:', currentStepName);
+
+      // Call the API
+      const response = await fetch('/api/get-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          step: currentStepName,
+          formData: formData
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get feedback');
+      }
+
+      const data = await response.json();
+      console.log('Feedback received:', data);
+
+      setFeedback(data.feedback);
+      setShowFeedback(true);
+
+    } catch (error) {
+      console.error('Feedback error:', error);
+      setFeedbackError(error.message || 'Could not get feedback. Please try again.');
+      setShowFeedback(true);
+    } finally {
+      setFeedbackLoading(false);
+    }
+  }
+
+  function isFeedbackAvailable() {
+    switch (step) {
+      case 1: // Outcome
+        return draft.outcome && draft.outcome.trim().length > 10;
+      case 2: // Beneficiary
+        return draft.beneficiary && draft.beneficiary.trim().length > 5;
+      case 3: // Current Method (nonDelivery)
+        return draft.nonDelivery && draft.nonDelivery.trim().length > 10;
+      case 4: // Alternatives
+        return draft.alternatives && draft.alternatives.trim().length > 10;
+      case 5: // Scoring
+        return true; // Always available on scoring step
+      default:
+        return false;
+    }
   }
 
   function nextStep() {
@@ -131,7 +355,16 @@ export default function WorthsmithApp() {
               />
               <div>
                 <h1 className="text-2xl font-bold text-slate-800">Worthsmith</h1>
-                <p className="text-sm text-slate-500">Value Articulation Assistant</p>
+                {currentStoryId ? (
+                  <p className="text-sm text-slate-500">
+                    Editing: {savedStories.find(s => s.id === currentStoryId)?.title}
+                    {hasUnsavedChanges && (
+                      <span className="ml-2 text-orange-600 font-medium">● Unsaved changes</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-500">Value Articulation Assistant</p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -153,17 +386,61 @@ export default function WorthsmithApp() {
                 ⚡ {expressMode ? 'Express' : 'Full'}
               </button>
               <button
-                onClick={saveStory}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                onClick={() => setScoringMethod(scoringMethod === 'RICE' ? 'BA' : 'RICE')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors border-2 ${
+                  scoringMethod === 'BA'
+                    ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                    : 'bg-sky-100 text-sky-700 border-sky-300'
+                }`}
+                title={`Switch to ${scoringMethod === 'RICE' ? 'BA' : 'RICE'} scoring`}
               >
-                💾 Save Story
+                🎯 <span className="hidden sm:inline">{scoringMethod}</span>
+              </button>
+
+              {/* Story management buttons */}
+              {currentStoryId ? (
+                <>
+                  <button
+                    onClick={updateStory}
+                    disabled={!hasUnsavedChanges}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors ${
+                      hasUnsavedChanges
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md'
+                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    }`}
+                    title={hasUnsavedChanges ? 'Save changes (Cmd+S)' : 'No changes to save'}
+                  >
+                    💾 Update
+                  </button>
+                  <button
+                    onClick={saveAsNew}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-sky-600 hover:bg-sky-50 rounded-lg transition-colors border-2 border-sky-200 hover:border-sky-300"
+                  >
+                    ➕ <span className="hidden sm:inline">Save As Copy</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={saveAsNew}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg transition-colors shadow-md"
+                  title="Save this story (Cmd+S)"
+                >
+                  💾 Save Story
+                </button>
+              )}
+
+              <button
+                onClick={startNewStory}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-violet-600 hover:bg-violet-50 rounded-lg transition-colors border-2 border-violet-200 hover:border-violet-300"
+              >
+                ✨ <span className="hidden sm:inline">New</span>
               </button>
               <button
                 onClick={loadExample}
                 className="flex items-center gap-2 px-4 py-2 text-sm text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
-                <span className="hidden sm:inline">Load Example</span>
+                <span className="hidden sm:inline">Example</span>
               </button>
               <button
                 onClick={resetDraft}
@@ -225,21 +502,29 @@ export default function WorthsmithApp() {
                 {step === 2 && !expressMode && <BeneficiaryStep value={draft.beneficiary} onChange={v => updateDraft({ beneficiary: v })} />}
                 {step === 3 && !expressMode && <ImpactStep value={draft.nonDelivery} onChange={v => updateDraft({ nonDelivery: v })} />}
                 {step === 4 && <AlternativesStep value={draft.alternatives} onChange={v => updateDraft({ alternatives: v })} expressMode={expressMode} outcome={draft.outcome} />}
-                {step === 5 && <ScoringStep draft={draft} onChange={updateDraft} />}
-                {step === 6 && <OutputStep draft={draft} onReset={resetDraft} expressMode={expressMode} />}
+                {step === 5 && <ScoringStep draft={draft} onChange={updateDraft} scoringMethod={scoringMethod} />}
+                {step === 6 && <OutputStep draft={draft} onReset={resetDraft} expressMode={expressMode} scoringMethod={scoringMethod} />}
               </div>
 
               {/* Navigation */}
               {step < 6 && (
                 <div className="flex items-center justify-between mt-8 pt-6 border-t">
-                  <button
-                    onClick={prevStep}
-                    disabled={step === 1}
-                    className="flex items-center gap-2 px-6 py-3 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:gap-3"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <FeedbackButton
+                      onClick={handleGetFeedback}
+                      loading={feedbackLoading}
+                      disabled={!isFeedbackAvailable()}
+                      step={step}
+                    />
+                    <button
+                      onClick={prevStep}
+                      disabled={step === 1}
+                      className="flex items-center gap-2 px-6 py-3 text-slate-600 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:gap-3"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back
+                    </button>
+                  </div>
                   <button
                     onClick={nextStep}
                     className="flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all hover:gap-3"
@@ -271,6 +556,22 @@ export default function WorthsmithApp() {
         </div>
         )}
       </div>
+
+      {/* AI Feedback Panel */}
+      {showFeedback && (
+        <FeedbackPanel
+          feedback={feedbackError ? null : feedback}
+          error={feedbackError}
+          onClose={() => setShowFeedback(false)}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className="fixed top-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-lg animate-slide-in-right z-50">
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
@@ -298,10 +599,15 @@ function getInitialDraft() {
     beneficiary: "",
     nonDelivery: "",
     alternatives: "",
+    // RICE fields
     reach: 6,
     impact: 6,
     effort: 6,
-    confidence: 6
+    confidence: 6,
+    // BA fields
+    valueScore: 3,
+    urgencyScore: 1,
+    sizeScore: 3
   };
 }
 
@@ -309,38 +615,63 @@ function getInitialDraft() {
 function SavedStoriesList({ stories, onLoad, onDelete }) {
   if (stories.length === 0) return null;
 
+  // Helper function for relative time
+  function formatRelativeTime(timestamp) {
+    if (!timestamp) return '';
+    const now = new Date();
+    const then = new Date(timestamp);
+    const seconds = Math.floor((now - then) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return then.toLocaleDateString();
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 transition-all hover:shadow-xl">
       <h3 className="font-semibold text-slate-800 mb-4">Saved Stories ({stories.length})</h3>
       <div className="space-y-2 max-h-64 overflow-y-auto">
-        {stories.map(story => (
-          <div
-            key={story.id}
-            className="group relative p-3 bg-slate-50 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-300 transition-all"
-          >
-            <button
-              onClick={() => onLoad(story)}
-              className="w-full text-left"
+        {stories.map(story => {
+          const hasBeenModified = story.lastModified && story.created && story.lastModified !== story.created;
+          const displayTime = story.lastModified || story.timestamp || story.created;
+
+          return (
+            <div
+              key={story.id}
+              className="group relative p-3 bg-slate-50 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-300 transition-all"
             >
-              <div className="font-medium text-sm text-slate-800 pr-8">{story.title}</div>
-              <div className="text-xs text-slate-500 mt-1">
-                {new Date(story.timestamp).toLocaleDateString()} • Click to load
-              </div>
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(story.id, story.title);
-              }}
-              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50 rounded p-1"
-              title="Delete story"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          </div>
-        ))}
+              <button
+                onClick={() => onLoad(story)}
+                className="w-full text-left"
+              >
+                <div className="font-medium text-sm text-slate-800 pr-8">{story.title}</div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {hasBeenModified ? (
+                    <>Modified {formatRelativeTime(story.lastModified)}</>
+                  ) : (
+                    <>Created {formatRelativeTime(displayTime)}</>
+                  )}
+                  <span className="mx-2">•</span>
+                  Click to load
+                </div>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(story.id, story.title);
+                }}
+                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50 rounded p-1"
+                title="Delete story"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -818,7 +1149,15 @@ function AlternativesStep({ value, onChange, expressMode, outcome }) {
   );
 }
 
-function ScoringStep({ draft, onChange }) {
+function ScoringStep({ draft, onChange, scoringMethod }) {
+  if (scoringMethod === 'BA') {
+    return <BAScoringStep draft={draft} onChange={onChange} />;
+  } else {
+    return <RICEScoringStep draft={draft} onChange={onChange} />;
+  }
+}
+
+function RICEScoringStep({ draft, onChange }) {
   const decision = getDecisionRecommendation(draft.reach, draft.impact, draft.effort, draft.confidence);
   const riceScore = calculateRICE(draft.reach, draft.impact, draft.confidence, draft.effort);
   const value = draft.reach * draft.impact;
@@ -828,7 +1167,7 @@ function ScoringStep({ draft, onChange }) {
       <div className="flex items-start gap-3">
         <Target className="w-6 h-6 text-sky-600 mt-1 flex-shrink-0" />
         <div className="flex-1">
-          <h2 className="text-xl font-bold text-slate-800">How would you score this?</h2>
+          <h2 className="text-xl font-bold text-slate-800">How would you score this? (RICE)</h2>
           <p className="text-slate-600 mt-2">Rate the reach, impact, effort, and confidence on a scale of 1-10.</p>
         </div>
       </div>
@@ -900,6 +1239,93 @@ function ScoringStep({ draft, onChange }) {
   );
 }
 
+function BAScoringStep({ draft, onChange }) {
+  const netPriorityScore = calculateBA(draft.valueScore, draft.urgencyScore, draft.sizeScore);
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex items-start gap-3">
+        <Target className="w-6 h-6 text-emerald-600 mt-1 flex-shrink-0" />
+        <div className="flex-1">
+          <h2 className="text-xl font-bold text-slate-800">How would you score this? (BA Method)</h2>
+          <p className="text-slate-600 mt-2">Select value, urgency, and size using t-shirt sizing.</p>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {/* Value Score */}
+        <TShirtPicker
+          label="Value Score"
+          description="Commercial value + experience impact"
+          value={draft.valueScore}
+          onChange={v => onChange({ valueScore: v })}
+          color="teal"
+          options={[
+            { value: 1, label: 'XS', description: 'Low impact or <€10k/month' },
+            { value: 2, label: 'S', description: '€10k-€30k/month' },
+            { value: 3, label: 'M', description: '€31k-€60k/month' },
+            { value: 4, label: 'L', description: '€61k-€120k/month' },
+            { value: 5, label: 'XL', description: '€121k-€250k/month' },
+            { value: 6, label: 'XXL', description: '€250k+/month' }
+          ]}
+        />
+
+        {/* Urgency Score */}
+        <TShirtPicker
+          label="Urgency Score"
+          description="Time criticality"
+          value={draft.urgencyScore}
+          onChange={v => onChange({ urgencyScore: v })}
+          color="red"
+          options={[
+            { value: 1, label: 'Normal', description: 'Needed as soon as we can have it' },
+            { value: 2, label: 'High', description: 'Needed in increment for external need / key business outcome' },
+            { value: 3, label: 'Very High', description: 'Needed very urgently must be in increment' }
+          ]}
+        />
+
+        {/* Size Score */}
+        <TShirtPicker
+          label="Size"
+          description="Full team capacity sprints (duration as % of team)"
+          value={draft.sizeScore}
+          onChange={v => onChange({ sizeScore: v })}
+          color="blue"
+          options={[
+            { value: 1, label: 'XS', description: '0.2 - 1 Sprint' },
+            { value: 2, label: 'S', description: '0.5 - 2 Sprints' },
+            { value: 3, label: 'M', description: '1 - 3 Sprints' },
+            { value: 4, label: 'L', description: '2 - 4 Sprints' },
+            { value: 5, label: 'XL', description: '4 - 6 Sprints' },
+            { value: 6, label: 'XXL', description: '6+ Sprints (too long...)' }
+          ]}
+        />
+      </div>
+
+      {/* Net Priority Score Display */}
+      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6">
+        <div className="text-center">
+          <h3 className="font-semibold text-slate-800 mb-1">Net Priority Score</h3>
+          <p className="text-xs text-slate-500 mb-3">(Value × Urgency) / Size</p>
+          <div className="text-5xl font-bold text-emerald-600 mb-2">
+            {netPriorityScore.toFixed(2)}
+          </div>
+          <p className="text-sm text-slate-600">
+            ({draft.valueScore} × {draft.urgencyScore}) / {draft.sizeScore}
+          </p>
+          <div className="mt-4 pt-4 border-t border-emerald-200">
+            <p className="text-sm font-medium text-slate-700">
+              {netPriorityScore >= 3 ? '🟢 High Priority' :
+               netPriorityScore >= 1.5 ? '🟡 Medium Priority' :
+               '🔴 Low Priority'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ScoreSlider({ label, value, onChange, color, description }) {
   const colorClasses = {
     purple: 'text-purple-600',
@@ -940,6 +1366,52 @@ function ScoreSlider({ label, value, onChange, color, description }) {
       <div className="flex justify-between text-xs text-slate-400">
         <span>Low</span>
         <span>High</span>
+      </div>
+    </div>
+  );
+}
+
+function TShirtPicker({ label, description, value, onChange, color, options }) {
+  const colorClasses = {
+    teal: {
+      selected: 'bg-teal-600 text-white border-teal-600',
+      unselected: 'bg-white text-slate-700 border-slate-300 hover:border-teal-400 hover:bg-teal-50'
+    },
+    red: {
+      selected: 'bg-red-600 text-white border-red-600',
+      unselected: 'bg-white text-slate-700 border-slate-300 hover:border-red-400 hover:bg-red-50'
+    },
+    blue: {
+      selected: 'bg-blue-600 text-white border-blue-600',
+      unselected: 'bg-white text-slate-700 border-slate-300 hover:border-blue-400 hover:bg-blue-50'
+    }
+  };
+
+  const colors = colorClasses[color] || colorClasses.teal;
+
+  return (
+    <div className="bg-white border-2 border-slate-200 rounded-xl p-5">
+      <div className="mb-3">
+        <h3 className="font-semibold text-slate-800 text-lg">{label}</h3>
+        <p className="text-sm text-slate-500 mt-1">{description}</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {options.map(option => (
+          <button
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            className={`
+              p-4 rounded-lg border-2 transition-all text-left
+              ${value === option.value ? colors.selected : colors.unselected}
+            `}
+          >
+            <div className="font-bold text-lg mb-1">{option.label}</div>
+            <div className={`text-xs ${value === option.value ? 'text-white/90' : 'text-slate-500'}`}>
+              {option.description}
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -1158,8 +1630,8 @@ function ValueCanvas({ data, draft, onBack }) {
   );
 }
 
-function OutputStep({ draft, onReset, expressMode }) {
-  const output = generateValueStatement(draft, expressMode);
+function OutputStep({ draft, onReset, expressMode, scoringMethod }) {
+  const output = generateValueStatement(draft, expressMode, scoringMethod);
   const [copied, setCopied] = useState(false);
   const [showCanvas, setShowCanvas] = useState(false);
   const [canvasData, setCanvasData] = useState(null);
@@ -1478,6 +1950,11 @@ function calculateRICE(reach, impact, confidence, effort) {
   return Math.round((reach * impact * confidence) / effort);
 }
 
+function calculateBA(valueScore, urgencyScore, sizeScore) {
+  if (sizeScore === 0 || sizeScore < 1) return 0;
+  return (valueScore * urgencyScore) / sizeScore;
+}
+
 function getDecisionRecommendation(reach, impact, effort, confidence) {
   // Calculate value tier based on Reach × Impact
   const value = reach * impact;
@@ -1586,11 +2063,45 @@ function getDecisionRecommendation(reach, impact, effort, confidence) {
   };
 }
 
-function generateValueStatement(draft, expressMode = false) {
-  const { outcome, beneficiary, nonDelivery, alternatives, reach, impact, effort, confidence } = draft;
-  const riceScore = calculateRICE(reach, impact, confidence, effort);
-  const value = reach * impact;
-  const decision = getDecisionRecommendation(reach, impact, effort, confidence);
+function generateValueStatement(draft, expressMode = false, scoringMethod = 'RICE') {
+  const { outcome, beneficiary, nonDelivery, alternatives, reach, impact, effort, confidence, valueScore, urgencyScore, sizeScore } = draft;
+
+  let scoringSection = '';
+  let recommendation = '';
+
+  if (scoringMethod === 'BA') {
+    const netPriorityScore = calculateBA(valueScore, urgencyScore, sizeScore);
+    const priority = netPriorityScore >= 3 ? 'High Priority' : netPriorityScore >= 1.5 ? 'Medium Priority' : 'Low Priority';
+
+    scoringSection = `**Scoring (BA Method):**
+- Value Score: ${valueScore}/6
+- Urgency Score: ${urgencyScore}/3
+- Size: ${sizeScore}/6
+- **Net Priority Score: ${netPriorityScore.toFixed(2)}** (${priority})
+
+Formula: (${valueScore} × ${urgencyScore}) / ${sizeScore} = ${netPriorityScore.toFixed(2)}`;
+
+    recommendation = `**Priority: ${priority}**
+${netPriorityScore >= 3 ? 'This initiative should be prioritized for immediate action.' :
+  netPriorityScore >= 1.5 ? 'This initiative has medium priority and should be scheduled accordingly.' :
+  'This initiative has lower priority and should be reviewed against higher-priority work.'}`;
+  } else {
+    // RICE scoring
+    const riceScore = calculateRICE(reach, impact, confidence, effort);
+    const value = reach * impact;
+    const decision = getDecisionRecommendation(reach, impact, effort, confidence);
+
+    scoringSection = `**Scoring (RICE):**
+- Value Score: ${value} (Reach: ${reach} × Impact: ${impact}) - ${value >= 49 ? 'High Value' : value >= 16 ? 'Medium Value' : 'Low Value'}
+- Effort: ${effort}/10
+- Confidence: ${confidence}/10
+- RICE Score: ${riceScore} (reference)`;
+
+    recommendation = `**Recommendation: ${decision.title}**
+${decision.desc}
+
+**Next Action:** ${decision.action}`;
+  }
 
   if (expressMode) {
     // Shorter format for express mode
@@ -1600,16 +2111,9 @@ function generateValueStatement(draft, expressMode = false) {
 
 **Alternatives Considered:** ${alternatives || '_not specified_'}
 
-**Scoring:**
-- Value Score: ${value} (Reach: ${reach} × Impact: ${impact}) - ${value >= 49 ? 'High Value' : value >= 16 ? 'Medium Value' : 'Low Value'}
-- Effort: ${effort}/10
-- Confidence: ${confidence}/10
-- RICE Score: ${riceScore} (reference)
+${scoringSection}
 
-**Recommendation: ${decision.title}**
-${decision.desc}
-
-**Next Action:** ${decision.action}
+${recommendation}
 
 ---
 *Generated by Worthsmith Express Mode • Quick Assessment*`;
@@ -1626,16 +2130,9 @@ ${decision.desc}
 
 **Alternatives Considered:** ${alternatives || '_not specified_'}
 
-**Scoring:**
-- Value Score: ${value} (Reach: ${reach} × Impact: ${impact}) - ${value >= 49 ? 'High Value' : value >= 16 ? 'Medium Value' : 'Low Value'}
-- Effort: ${effort}/10
-- Confidence: ${confidence}/10
-- RICE Score: ${riceScore} (reference)
+${scoringSection}
 
-**Recommendation: ${decision.title}**
-${decision.desc}
-
-**Next Action:** ${decision.action}
+${recommendation}
 
 ---
 *Generated by Worthsmith • Ready for Jira*`;
